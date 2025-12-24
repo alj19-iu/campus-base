@@ -33,6 +33,7 @@
     </script>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
@@ -59,7 +60,9 @@
         // --- 1. INDEXED DB HELPER ---
         const DB_NAME = 'CampusBaseDB_v12'; 
         const STORE_NAME = 'courses';
-
+        const supabaseUrl = 'https://kxhubxycrplzbfwaokzb.supabase.co'
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4aHVieHljcnBsemJmd2Fva3piIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY1MjkyNDgsImV4cCI6MjA4MjEwNTI0OH0.gUsjwwdtrzVybfvSyNF4yDyTNx4UkTO_p9FvXXWnO4k'
+        const supabase = supabase.createClient(supabaseUrl, supabaseKey)
         const dbHelper = {
             open: () => {
                 return new Promise((resolve, reject) => {
@@ -82,12 +85,11 @@
                     request.onerror = () => reject(request.error);
                 });
             },
-            save: async (course) => {
-                const db = await dbHelper.open();
-                const tx = db.transaction(STORE_NAME, 'readwrite');
-                const store = tx.objectStore(STORE_NAME);
-                store.put(course);
-                return tx.complete;
+            save: async (allCourses) => {
+                const { data, error } = await supabase
+                .from('courses')
+                .upsert({ id: 1, data: allCourses }) // We use ID 1 to keep one master list
+                if (error) console.error("Error saving to cloud:", error);
             },
             clearAll: async () => {
                 const db = await dbHelper.open();
@@ -688,4 +690,5 @@
         root.render(<App />);
     </script>
 </body>
+
 </html>
