@@ -62,7 +62,8 @@
         const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4aHVieHljcnBsemJmd2Fva3piIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY1MjkyNDgsImV4cCI6MjA4MjEwNTI0OH0.gUsjwwdtrzVybfvSyNF4yDyTNx4UkTO_p9FvXXWnO4k';
         const supabase = supabase.createClient(supabaseUrl, supabaseKey);
 
-        // --- 2. INDEXED DB HELPER (ORIGINAL) ---
+        // --- 2. INDEXED DB HELPER (FALLBACK ONLY) ---
+        // We keep the DB helper for local backup, but loadAllData is updated to prioritize Cloud/User separation.
         const DB_NAME = 'CampusBaseDB_v12'; 
         const STORE_NAME = 'courses';
 
@@ -111,7 +112,7 @@
             }
         };
 
-        // --- ICONS (ORIGINAL) ---
+        // --- ICONS ---
         const Icon = ({ name, size = 18, className = "" }) => {
             const icons = {
                 plus: "M12 5v14M5 12h14",
@@ -197,33 +198,41 @@
                 // Check current session
                 supabase.auth.getSession().then(({ data: { session } }) => {
                     setUser(session?.user ?? null);
-                    if (session?.user) loadAllData(); else setLoading(false);
+                    if (session?.user) loadAllData(session.user.id); else setLoading(false);
                 });
 
                 // Listen for changes
                 const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
                     setUser(session?.user ?? null);
-                    if (session?.user) loadAllData();
+                    if (session?.user) {
+                        loadAllData(session.user.id);
+                    } else {
+                        setCourses([]);
+                        dbHelper.clearAll();
+                    }
                 });
 
                 return () => subscription.unsubscribe();
             }, []);
 
-            const loadAllData = async () => {
+            const loadAllData = async (userId) => {
                 setLoading(true);
-                // 1. Load from Local (IndexedDB)
-                const localData = await dbHelper.getAll();
-                
-                // 2. Load from Supabase
-                const { data, error } = await supabase.from('courses').select('data').maybeSingle();
+                // 1. Fetch specifically for this user to avoid data bleed
+                const { data, error } = await supabase
+                    .from('courses')
+                    .select('data')
+                    .eq('user_id', userId)
+                    .maybeSingle();
                 
                 if (data && data.data) {
                     setCourses(data.data);
-                    // Sync cloud to local
+                    // Update local storage for current user session
                     await dbHelper.clearAll();
                     for(const c of data.data) await dbHelper.save(c);
                 } else {
-                    setCourses(localData);
+                    // If no cloud data, we clear local to ensure new user starts fresh
+                    setCourses([]);
+                    await dbHelper.clearAll();
                 }
                 setLoading(false);
             };
@@ -263,12 +272,13 @@
                 await supabase.auth.signOut();
                 setUser(null);
                 setCourses([]);
+                await dbHelper.clearAll();
             };
 
             const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
             const activeCourse = courses.find(c => c.id === activeCourseId);
 
-            // --- BREADCRUMB LOGIC (ORIGINAL) ---
+            // --- BREADCRUMB LOGIC ---
             const getBreadcrumbs = () => {
                 if (!currentFolderId || !activeCourse) return [];
                 const path = [];
@@ -281,7 +291,7 @@
                 return path;
             };
 
-            // --- COMPUTED: SEARCH RESULTS (ORIGINAL) ---
+            // --- COMPUTED: SEARCH RESULTS ---
             const searchResults = useMemo(() => {
                 if (!searchQuery.trim()) return [];
                 const q = searchQuery.toLowerCase();
@@ -296,7 +306,7 @@
                 return results;
             }, [searchQuery, courses]);
 
-            // --- BACKUP & RESTORE (ORIGINAL) ---
+            // --- BACKUP & RESTORE ---
             const downloadBackup = () => {
                 const dataStr = JSON.stringify(courses);
                 const blob = new Blob([dataStr], { type: "application/json" });
@@ -334,7 +344,7 @@
                 reader.readAsText(file);
             };
 
-            // --- CRUD (ORIGINAL) ---
+            // --- CRUD ---
             const addCourse = async () => {
                 const newCourse = { 
                     id: Date.now().toString(), 
@@ -384,7 +394,7 @@
                 await syncToCloud(updatedAll);
             };
 
-            // --- RESOURCE / NOTE CRUD (ORIGINAL) ---
+            // --- RESOURCE / NOTE CRUD ---
             const saveResource = async () => {
                 if (!newResTitle) return alert("Title required");
                 const newId = Date.now().toString();
@@ -395,7 +405,7 @@
                     if (!newResFile) return alert("No file");
                     const reader = new FileReader();
                     reader.onload = async (e) => {
-                        resource.fileData = e.target.result; // Store as base64 for IndexedDB/Cloud
+                        resource.fileData = e.target.result; 
                         resource.mimeType = newResFile.type;
                         finishResource(resource);
                     };
@@ -489,7 +499,7 @@
                 </div>
             );
 
-            // --- MAIN UI RENDER (ORIGINAL) ---
+            // --- MAIN UI RENDER ---
             const visibleItems = activeCourse 
                 ? activeCourse.links.filter(l => (l.parentId || null) === (currentFolderId || null))
                 : [];
@@ -499,7 +509,7 @@
             return (
                 <div className="min-h-screen pb-20">
                     
-                    {/* --- DASHBOARD (ORIGINAL) --- */}
+                    {/* --- DASHBOARD --- */}
                     {view === 'dashboard' && (
                         <div className="max-w-7xl mx-auto p-4 md:p-8 animate-fade">
                             <header className="flex flex-col md:flex-row items-center justify-between mb-8 gap-4">
@@ -573,7 +583,7 @@
                         </div>
                     )}
 
-                    {/* --- COURSE VIEW (ORIGINAL) --- */}
+                    {/* --- COURSE VIEW --- */}
                     {view === 'course' && activeCourse && (
                         <div className="animate-fade bg-white dark:bg-notion-dark min-h-screen">
                             <nav className="sticky top-0 z-20 bg-white/95 dark:bg-notion-dark/95 backdrop-blur-sm border-b border-gray-200 dark:border-notion-darkBorder px-4 py-2 flex justify-between items-center h-12">
@@ -670,7 +680,7 @@
                         </div>
                     )}
 
-                    {/* --- MODALS (ORIGINAL) --- */}
+                    {/* --- MODALS --- */}
                     {previewFile && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade">
                             <div className="bg-white dark:bg-notion-darkDim w-full h-[90vh] max-w-5xl rounded-lg shadow-2xl flex flex-col overflow-hidden border border-gray-200 dark:border-gray-700">
