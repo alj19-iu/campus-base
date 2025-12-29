@@ -32,21 +32,23 @@
         .dark ::-webkit-scrollbar-thumb { background: #444; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade { animation: fadeIn 0.2s ease-out forwards; }
-        #error-boundary { display: none; padding: 20px; background: #1e3a8a; color: white; font-family: monospace; position: fixed; top:0; left:0; width:100%; height:100%; z-index: 9999; }
+        #error-boundary { display: none; padding: 40px; background: #1a1a1a; color: #ff5555; font-family: monospace; position: fixed; top:0; left:0; width:100%; height:100%; z-index: 9999; text-align: center; }
     </style>
 </head>
 <body class="bg-notion-dim text-gray-900 dark:bg-notion-dark dark:text-gray-100 transition-colors duration-300">
 
     <div id="error-boundary">
-        <h2 class="text-xl font-bold mb-4">Application Error</h2>
-        <p id="error-message">Unknown error occurred.</p>
-        <button onclick="window.location.reload()" class="mt-4 bg-white text-blue-900 px-4 py-2 rounded font-bold">Reload</button>
+        <h2 class="text-2xl font-bold mb-4">App Crash Detected</h2>
+        <p id="error-message" class="mb-6 text-gray-400">Loading...</p>
+        <button onclick="localStorage.clear(); window.location.reload();" class="bg-red-600 text-white px-6 py-2 rounded-lg font-bold">Hard Reset App</button>
+        <p class="mt-4 text-xs text-gray-500">Warning: Hard Reset will log you out.</p>
     </div>
+
     <script>
-        window.onerror = function(msg, url, lineNo, columnNo, error) {
+        window.onerror = function(msg, url, lineNo) {
             document.getElementById('root').style.display = 'none';
             document.getElementById('error-boundary').style.display = 'block';
-            document.getElementById('error-message').innerText = `Error: ${msg}\nLine: ${lineNo}`;
+            document.getElementById('error-message').innerText = msg + " (Line: " + lineNo + ")";
             return false;
         };
     </script>
@@ -54,53 +56,30 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo, useRef } = React;
+        const { useState, useEffect, useMemo } = React;
 
-        // --- 1. SUPABASE CONNECTION (GRAY SCREEN FIX) ---
-        // We use window.supabase to access the library to avoid naming conflicts
+        // --- 1. SUPABASE CONNECTION ---
         const supabaseUrl = 'https://kxhubxycrplzbfwaokzb.supabase.co';
         const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4aHVieHljcnBsemJmd2Fva3piIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY1MjkyNDgsImV4cCI6MjA4MjEwNTI0OH0.gUsjwwdtrzVybfvSyNF4yDyTNx4UkTO_p9FvXXWnO4k';
-        
-        // This ensures the library is loaded before we create the client
-        if (!window.supabase) { throw new Error("Supabase library failed to load. Please reload."); }
-        const { createClient } = window.supabase; 
-        const supabase = createClient(supabaseUrl, supabaseKey);
+        const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 
-        // --- 2. INDEXED DB HELPER (LOCAL CACHE) ---
+        // --- 2. INDEXED DB HELPER ---
         const DB_NAME = 'CampusBaseDB_v12'; 
         const STORE_NAME = 'courses';
         const dbHelper = {
-            open: () => new Promise((resolve, reject) => {
-                const request = indexedDB.open(DB_NAME, 1);
-                request.onupgradeneeded = (e) => {
-                    const db = e.target.result;
-                    if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-                };
-                request.onsuccess = () => resolve(request.result);
-                request.onerror = () => reject(request.error);
+            open: () => new Promise((res, rej) => {
+                const req = indexedDB.open(DB_NAME, 1);
+                req.onupgradeneeded = (e) => e.target.result.createObjectStore(STORE_NAME, { keyPath: 'id' });
+                req.onsuccess = () => res(req.result);
+                req.onerror = () => rej(req.error);
             }),
-            getAll: async () => {
-                const db = await dbHelper.open();
-                return new Promise((res) => {
-                    const tx = db.transaction(STORE_NAME, 'readonly');
-                    const request = tx.objectStore(STORE_NAME).getAll();
-                    request.onsuccess = () => res(request.result || []);
-                });
-            },
             save: async (item) => {
                 const db = await dbHelper.open();
-                const tx = db.transaction(STORE_NAME, 'readwrite');
-                tx.objectStore(STORE_NAME).put(item);
+                db.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).put(item);
             },
             clearAll: async () => {
                 const db = await dbHelper.open();
-                const tx = db.transaction(STORE_NAME, 'readwrite');
-                tx.objectStore(STORE_NAME).clear();
-            },
-            delete: async (id) => {
-                const db = await dbHelper.open();
-                const tx = db.transaction(STORE_NAME, 'readwrite');
-                tx.objectStore(STORE_NAME).delete(id);
+                db.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).clear();
             }
         };
 
@@ -142,7 +121,7 @@
             const [user, setUser] = useState(null);
             const [courses, setCourses] = useState([]);
             const [loading, setLoading] = useState(true);
-            const [view, setView] = useState('dashboard'); 
+            const [view, setView] = useState('dashboard');
             const [activeCourseId, setActiveCourseId] = useState(null);
             const [currentFolderId, setCurrentFolderId] = useState(null);
             const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
@@ -150,367 +129,174 @@
             const [resourceViewMode, setResourceViewMode] = useState('list');
             const [saveStatus, setSaveStatus] = useState('');
 
-            // Auth
             const [authMode, setAuthMode] = useState('login');
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
             const [authLoading, setAuthLoading] = useState(false);
 
-            // Modals
             const [showSettings, setShowSettings] = useState(false);
             const [showResourceModal, setShowResourceModal] = useState(false);
             const [previewFile, setPreviewFile] = useState(null);
             const [noteEditorOpen, setNoteEditorOpen] = useState(false);
             const [editingNote, setEditingNote] = useState(null);
 
-            // Forms
             const [newResTitle, setNewResTitle] = useState('');
             const [newResUrl, setNewResUrl] = useState('');
             const [newResFile, setNewResFile] = useState(null);
             const [resourceType, setResourceType] = useState('note');
 
+            // --- THEME LOGIC (FIXED) ---
             useEffect(() => {
                 if (theme === 'dark') document.documentElement.classList.add('dark');
                 else document.documentElement.classList.remove('dark');
                 localStorage.setItem('theme', theme);
             }, [theme]);
 
-            // --- AUTH & DATA LOGIC ---
+            const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
+
+            // --- AUTH LOGIC ---
             useEffect(() => {
-                // Initial Session Check
-                supabase.auth.getSession().then(({ data: { session } }) => {
+                supabaseClient.auth.getSession().then(({ data: { session } }) => {
                     setUser(session?.user ?? null);
-                    if (session?.user) loadAllData(session.user.id); else setLoading(false);
+                    if (session?.user) loadData(session.user.id); else setLoading(false);
                 });
 
-                // Listen for Login/Logout
-                const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+                const { data: { subscription } } = supabaseClient.auth.onAuthStateChange((_event, session) => {
                     setUser(session?.user ?? null);
-                    if (session?.user) {
-                        loadAllData(session.user.id);
-                    } else {
-                        // FIX: Wipe everything on logout to prevent data leaking
-                        setCourses([]);
-                        dbHelper.clearAll();
-                        setLoading(false);
-                    }
+                    if (session?.user) loadData(session.user.id);
+                    else { setCourses([]); dbHelper.clearAll(); setLoading(false); }
                 });
                 return () => subscription.unsubscribe();
             }, []);
 
-            const loadAllData = async (userId) => {
+            const loadData = async (uid) => {
                 setLoading(true);
-                // FIX: Wipe local cache first (Security)
-                await dbHelper.clearAll(); 
-
-                // Fetch from Cloud
-                const { data, error } = await supabase
-                    .from('courses')
-                    .select('data')
-                    .eq('user_id', userId)
-                    .maybeSingle();
-                
-                if (data && data.data) {
+                const { data } = await supabaseClient.from('courses').select('data').eq('user_id', uid).maybeSingle();
+                if (data?.data) {
                     setCourses(data.data);
-                    // Update Local Cache
                     for(const c of data.data) await dbHelper.save(c);
-                } else {
-                    setCourses([]); 
                 }
                 setLoading(false);
             };
 
-            const syncToCloud = async (updatedCourses) => {
-                setCourses(updatedCourses);
-                const { data: { user } } = await supabase.auth.getUser();
+            const sync = async (updated) => {
+                setCourses(updated);
+                const { data: { user } } = await supabaseClient.auth.getUser();
                 if (!user) return;
-
                 setSaveStatus('Saving...');
-                
-                // Update Local Cache
-                await dbHelper.clearAll();
-                for(const c of updatedCourses) await dbHelper.save(c);
-
-                // Update Cloud
-                const { error } = await supabase
-                    .from('courses')
-                    .upsert({ 
-                        user_id: user.id, 
-                        data: updatedCourses,
-                        updated_at: new Date()
-                    }, { onConflict: 'user_id' });
-                
-                if (error) {
-                    console.error("Cloud Sync Error:", error);
-                    setSaveStatus('Error saving!');
-                } else {
-                    setSaveStatus('Saved');
-                    setTimeout(() => setSaveStatus(''), 2000);
-                }
+                const { error } = await supabaseClient.from('courses').upsert({ user_id: user.id, data: updated, updated_at: new Date() }, { onConflict: 'user_id' });
+                setSaveStatus(error ? 'Error!' : 'Saved');
+                setTimeout(() => setSaveStatus(''), 2000);
             };
 
             const handleAuth = async (e) => {
                 e.preventDefault();
                 setAuthLoading(true);
                 const { error } = authMode === 'login' 
-                    ? await supabase.auth.signInWithPassword({ email, password })
-                    : await supabase.auth.signUp({ email, password });
-                
+                    ? await supabaseClient.auth.signInWithPassword({ email, password })
+                    : await supabaseClient.auth.signUp({ email, password });
                 if (error) alert(error.message);
                 setAuthLoading(false);
             };
 
-            const handleLogout = async () => {
-                await supabase.auth.signOut();
-                // onAuthStateChange will handle the cleanup
-            };
-
             // --- UI HELPERS ---
             const activeCourse = courses.find(c => c.id === activeCourseId);
-
-            const getBreadcrumbs = () => {
-                if (!currentFolderId || !activeCourse) return [];
-                const path = [];
-                let tempId = currentFolderId;
-                while(tempId) {
-                    const folder = activeCourse.links.find(l => l.id === tempId);
-                    if(folder) { path.unshift(folder); tempId = folder.parentId; } else break;
-                }
-                return path;
-            };
+            const visibleItems = activeCourse ? activeCourse.links.filter(l => (l.parentId || null) === (currentFolderId || null)) : [];
 
             const searchResults = useMemo(() => {
                 if (!searchQuery.trim()) return [];
-                const q = searchQuery.toLowerCase();
                 const results = [];
                 courses.forEach(c => c.links.forEach(l => {
-                    if (l.title.toLowerCase().includes(q)) results.push({ type: 'resource', item: l, course: c });
+                    if (l.title.toLowerCase().includes(searchQuery.toLowerCase())) results.push({ c, l });
                 }));
                 return results;
             }, [searchQuery, courses]);
 
-            // --- CRUD ACTIONS ---
-            const addCourse = async () => {
-                const newCourse = { 
-                    id: Date.now().toString(), code: 'NEW', name: 'Untitled Course', 
-                    building: 'TBD', room: '', schedule: '', scratchpad: '', color: 'gray', links: [] 
-                };
-                const updated = [...courses, newCourse];
-                await syncToCloud(updated);
-                setActiveCourseId(newCourse.id);
-                setView('course');
-                setShowSettings(true);
+            const addCourse = () => {
+                const n = { id: Date.now().toString(), code: 'NEW', name: 'Untitled', building: 'TBD', room: '', schedule: '', scratchpad: '', color: 'gray', links: [] };
+                sync([...courses, n]);
+                setActiveCourseId(n.id); setView('course'); setShowSettings(true);
             };
 
-            const updateCourse = async (id, field, value) => {
-                const updated = courses.map(c => c.id === id ? { ...c, [field]: value } : c);
-                await syncToCloud(updated);
-            };
+            const updateCourse = (id, f, v) => sync(courses.map(c => c.id === id ? { ...c, [f]: v } : c));
+            const deleteCourse = (id) => { if(confirm("Delete?")) { sync(courses.filter(c => c.id !== id)); setView('dashboard'); } };
 
-            const deleteCourse = async (id) => {
-                if(confirm("Delete this page?")) {
-                    const updated = courses.filter(c => c.id !== id);
-                    await syncToCloud(updated);
-                    setView('dashboard');
-                    setShowSettings(false);
+            const saveResource = () => {
+                const r = { id: Date.now().toString(), title: newResTitle, type: resourceType, parentId: currentFolderId || null };
+                if (resourceType === 'link') r.url = newResUrl;
+                if (resourceType === 'file' && newResFile) {
+                    const rd = new FileReader(); rd.onload = (e) => { r.fileData = e.target.result; r.mimeType = newResFile.type; finishRes(r); }; rd.readAsDataURL(newResFile); return;
                 }
+                if (resourceType === 'note') { r.content = ''; setEditingNote(r); setNoteEditorOpen(true); }
+                finishRes(r);
             };
 
-            const saveResource = async () => {
-                if (!newResTitle) return alert("Title required");
-                const resource = { id: Date.now().toString(), title: newResTitle, type: resourceType, parentId: currentFolderId || null };
-                
-                if (resourceType === 'link') resource.url = newResUrl;
-                else if (resourceType === 'file') {
-                    if (!newResFile) return alert("No file");
-                    const reader = new FileReader();
-                    reader.onload = async (e) => {
-                        resource.fileData = e.target.result;
-                        resource.mimeType = newResFile.type;
-                        finalizeResource(resource);
-                    };
-                    reader.readAsDataURL(newResFile);
-                    return;
-                } else if (resourceType === 'note') {
-                    resource.content = '';
-                    setTimeout(() => { setEditingNote(resource); setNoteEditorOpen(true); }, 100);
-                }
-                finalizeResource(resource);
+            const finishRes = (r) => {
+                sync(courses.map(c => c.id === activeCourseId ? { ...c, links: [...c.links, r] } : c));
+                setShowResourceModal(false); setNewResTitle('');
             };
 
-            const finalizeResource = async (resource) => {
-                const updated = courses.map(c => c.id === activeCourseId ? { ...c, links: [...c.links, resource] } : c);
-                await syncToCloud(updated);
-                setNewResTitle(''); setNewResUrl(''); setNewResFile(null); setShowResourceModal(false);
-            };
+            if (loading) return <div className="h-screen flex items-center justify-center">Loading...</div>;
 
-            const saveNoteContent = async (noteId, newContent, newTitle) => {
-                const updated = courses.map(c => c.id === activeCourseId ? { ...c, links: c.links.map(l => l.id === noteId ? { ...l, content: newContent, title: newTitle } : l) } : c);
-                await syncToCloud(updated);
-            };
-
-            const deleteResource = async (resId, type) => {
-                if(!confirm("Delete item?")) return;
-                const updated = courses.map(c => c.id === activeCourseId ? { ...c, links: c.links.filter(l => l.id !== resId) } : c);
-                await syncToCloud(updated);
-            };
-
-            const handleResourceClick = (link) => {
-                if (link.type === 'folder') setCurrentFolderId(link.id);
-                else if (link.type === 'note') { setEditingNote(link); setNoteEditorOpen(true); }
-                else if (link.type === 'link') window.open(link.url, '_blank');
-                else if (link.fileData) setPreviewFile({ url: link.fileData, type: link.mimeType, title: link.title });
-            };
-
-            const downloadBackup = () => {
-                const dataStr = JSON.stringify(courses);
-                const blob = new Blob([dataStr], { type: "application/json" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url; a.download = `notes_backup_${new Date().toISOString().slice(0,10)}.json`;
-                document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-            };
-
-            const restoreBackup = async (event) => {
-                const file = event.target.files[0];
-                if (!file || !confirm("Replace all notes with this backup?")) return;
-                const reader = new FileReader();
-                reader.onload = async (e) => {
-                    try {
-                        const importedCourses = JSON.parse(e.target.result);
-                        await syncToCloud(importedCourses);
-                        alert("Restored!");
-                    } catch (err) { alert("Error!"); }
-                };
-                reader.readAsText(file);
-            };
-
-            // --- RENDERERS ---
-            if (loading) return <div className="h-screen flex items-center justify-center text-gray-400">Loading your workspace...</div>;
-
-            if (!user) {
-                return (
-                    <div className="min-h-screen flex items-center justify-center bg-notion-dim dark:bg-notion-dark p-6 animate-fade">
-                        <div className="w-full max-w-md bg-white dark:bg-notion-darkDim p-8 rounded-2xl shadow-xl border dark:border-notion-darkBorder">
-                            <h2 className="text-3xl font-bold mb-2">{authMode === 'login' ? 'Welcome Back' : 'Create Account'}</h2>
-                            <p className="text-gray-500 mb-8">{authMode === 'login' ? 'Sign in to sync your notes' : 'Join to keep your notes in the cloud'}</p>
-                            
-                            <form onSubmit={handleAuth} className="space-y-4">
-                                <div><label className="text-xs font-bold uppercase text-gray-400">Email Address</label>
-                                <input type="email" required className="w-full p-3 mt-1 bg-gray-50 dark:bg-black border rounded-lg outline-none" onChange={e => setEmail(e.target.value)} /></div>
-                                <div><label className="text-xs font-bold uppercase text-gray-400">Password</label>
-                                <input type="password" required className="w-full p-3 mt-1 bg-gray-50 dark:bg-black border rounded-lg outline-none" onChange={e => setPassword(e.target.value)} /></div>
-                                <button disabled={authLoading} type="submit" className="w-full bg-blue-600 text-white p-4 rounded-xl font-bold hover:bg-blue-700">{authLoading ? 'Please wait...' : (authMode === 'login' ? 'Sign In' : 'Create Account')}</button>
-                            </form>
-                            <div className="mt-8 pt-6 border-t dark:border-notion-darkBorder text-center">
-                                <button onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')} className="text-sm text-blue-600 font-medium hover:underline">
-                                    {authMode === 'login' ? "Don't have an account? Sign up" : "Already have an account? Log in"}
-                                </button>
-                            </div>
-                        </div>
+            if (!user) return (
+                <div className="min-h-screen flex items-center justify-center p-6 animate-fade">
+                    <div className="w-full max-w-md bg-white dark:bg-notion-darkDim p-8 rounded-2xl shadow-xl border dark:border-notion-darkBorder">
+                        <h2 className="text-2xl font-bold mb-6">{authMode === 'login' ? 'Login' : 'Sign Up'}</h2>
+                        <form onSubmit={handleAuth} className="space-y-4">
+                            <input type="email" placeholder="Email" className="w-full p-3 bg-gray-50 dark:bg-black border rounded-lg" onChange={e => setEmail(e.target.value)} />
+                            <input type="password" placeholder="Password" className="w-full p-3 bg-gray-50 dark:bg-black border rounded-lg" onChange={e => setPassword(e.target.value)} />
+                            <button className="w-full bg-blue-600 text-white p-3 rounded-xl font-bold">{authLoading ? '...' : 'Continue'}</button>
+                        </form>
+                        <button onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')} className="w-full mt-4 text-sm text-blue-500 underline">Switch to {authMode === 'login' ? 'Sign Up' : 'Login'}</button>
                     </div>
-                );
-            }
-
-            const visibleItems = activeCourse ? activeCourse.links.filter(l => (l.parentId || null) === (currentFolderId || null)) : [];
-            const breadcrumbs = getBreadcrumbs();
+                </div>
+            );
 
             return (
                 <div className="min-h-screen pb-20">
-                    {view === 'dashboard' && (
-                        <div className="max-w-7xl mx-auto p-4 md:p-8 animate-fade">
-                            <header className="flex flex-col md:flex-row items-center justify-between mb-8 gap-4">
-                                <div className="w-full md:max-w-lg relative">
-                                    <div className="absolute left-3 top-2.5 text-gray-400"><Icon name="search" size={16} /></div>
-                                    <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full pl-9 py-2 bg-white dark:bg-notion-darkDim border dark:border-notion-darkBorder rounded-lg shadow-sm text-sm outline-none" placeholder="Search..." />
-                                    {searchQuery && (
-                                        <div className="absolute top-11 left-0 right-0 bg-white dark:bg-[#252525] border rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto">
-                                            {searchResults.map((res, i) => (
-                                                <div key={i} onClick={() => { setActiveCourseId(res.course.id); setView('course'); setSearchQuery(''); }} className="p-3 hover:bg-gray-100 dark:hover:bg-white/5 cursor-pointer border-b last:border-0 dark:border-notion-darkBorder">
-                                                    <div className="text-[10px] text-gray-400 uppercase font-bold">{res.course.code}</div>
-                                                    <div className="text-sm">{res.item.title}</div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="flex gap-4 items-center">
-                                    <span className={`text-xs font-bold ${saveStatus.includes('Error') ? 'text-red-500' : 'text-green-500'}`}>{saveStatus}</span>
-                                    <button onClick={downloadBackup} className="p-2 text-gray-400"><Icon name="download" /></button>
-                                    <label className="p-2 text-gray-400 cursor-pointer"><input type="file" onChange={restoreBackup} hidden accept=".json" /><Icon name="upload" /></label>
-                                    <button onClick={toggleTheme} className="p-2 text-gray-400 hover:text-black dark:hover:text-white"><Icon name={theme==='light'?'moon':'sun'} size={20}/></button>
-                                    <button onClick={handleLogout} className="p-2 text-gray-400 hover:text-red-500"><Icon name="logout" size={20}/></button>
+                    {view === 'dashboard' ? (
+                        <div className="max-w-6xl mx-auto p-6 animate-fade">
+                            <header className="flex justify-between items-center mb-10">
+                                <h1 className="text-2xl font-bold">My Workspace</h1>
+                                <div className="flex items-center gap-4">
+                                    <span className="text-xs font-bold text-gray-400">{saveStatus}</span>
+                                    <button onClick={toggleTheme} className="p-2"><Icon name={theme==='light'?'moon':'sun'} /></button>
+                                    <button onClick={() => supabaseClient.auth.signOut()} className="p-2 text-red-500"><Icon name="logout" /></button>
                                 </div>
                             </header>
-
-                            <div className="flex justify-between items-end mb-4">
-                                <h2 className="text-2xl font-bold">Your Courses</h2>
-                                <button onClick={addCourse} className="text-blue-600 font-bold text-sm flex items-center gap-1"><Icon name="plus" size={16} /> Add Class</button>
-                            </div>
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                                {courses.map(course => (
-                                    <div key={course.id} onClick={() => { setActiveCourseId(course.id); setView('course'); }} className="group bg-white dark:bg-notion-darkDim rounded-xl shadow-sm border dark:border-notion-darkBorder cursor-pointer overflow-hidden hover:shadow-lg transition-all">
-                                        <div className={`h-28 ${COLORS[course.color].cover}`}></div>
-                                        <div className="p-5">
-                                            <div className={`inline-block px-2 py-1 rounded text-[10px] font-bold uppercase ${COLORS[course.color].bg} ${COLORS[course.color].text}`}>{course.code}</div>
-                                            <h3 className="font-bold text-lg mt-3 truncate">{course.name}</h3>
-                                            <div className="flex items-center gap-2 text-xs text-gray-500 mt-2"><Icon name="mapPin" size={12} /> {course.building} {course.room}</div>
-                                        </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                                {courses.map(c => (
+                                    <div key={c.id} onClick={() => { setActiveCourseId(c.id); setView('course'); }} className="bg-white dark:bg-notion-darkDim rounded-xl overflow-hidden border dark:border-notion-darkBorder cursor-pointer shadow-sm hover:shadow-md">
+                                        <div className={`h-24 ${COLORS[c.color].cover}`}></div>
+                                        <div className="p-4"><div className={`text-[10px] font-bold uppercase inline-block px-2 py-0.5 rounded ${COLORS[c.color].bg} ${COLORS[c.color].text}`}>{c.code}</div><h3 className="font-bold mt-2">{c.name}</h3></div>
                                     </div>
                                 ))}
+                                <button onClick={addCourse} className="border-2 border-dashed dark:border-notion-darkBorder rounded-xl p-8 flex flex-col items-center text-gray-400 hover:bg-white/5"><Icon name="plus" size={30} /><span className="text-xs font-bold mt-2">New Class</span></button>
                             </div>
                         </div>
-                    )}
-
-                    {view === 'course' && activeCourse && (
+                    ) : (
                         <div className="animate-fade">
-                            <nav className="sticky top-0 z-20 bg-white/95 dark:bg-notion-dark/95 backdrop-blur-sm border-b px-4 py-2 flex justify-between items-center h-14">
-                                <button onClick={() => setView('dashboard')} className="text-sm font-medium flex items-center gap-1"><Icon name="arrowLeft" size={16} /> Dashboard</button>
-                                <div className="flex gap-3">
-                                    <span className="text-xs text-green-500 font-bold flex items-center">{saveStatus}</span>
-                                    <button onClick={() => setShowSettings(true)} className="text-sm font-medium flex items-center gap-1"><Icon name="settings" size={16}/> Edit Page</button>
-                                </div>
+                            <nav className="h-14 border-b flex items-center justify-between px-4 sticky top-0 bg-white/80 dark:bg-notion-dark/80 backdrop-blur-md z-50">
+                                <button onClick={() => setView('dashboard')} className="flex items-center gap-2 text-sm font-medium"><Icon name="arrowLeft" /> Dashboard</button>
+                                <button onClick={() => setShowSettings(true)} className="flex items-center gap-2 text-sm font-medium"><Icon name="settings" /> Settings</button>
                             </nav>
-                            <div className={`h-48 w-full ${COLORS[activeCourse.color].cover}`}></div>
-                            <div className="max-w-7xl mx-auto px-6 md:px-12 -mt-8 relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-10">
-                                <div className="lg:col-span-9 bg-white dark:bg-notion-darkDim p-8 rounded-2xl shadow-xl border dark:border-notion-darkBorder">
-                                    <h1 className="text-4xl font-bold mb-3">{activeCourse.name}</h1>
-                                    <div className="flex items-center gap-4 text-sm text-gray-500 mb-8 border-b pb-8">
-                                        <span className="flex items-center gap-1"><Icon name="mapPin" size={14} /> {activeCourse.building} {activeCourse.room}</span>
-                                        <span className="flex items-center gap-1"><Icon name="clock" size={14} /> {activeCourse.schedule}</span>
+                            <div className={`h-40 w-full ${COLORS[activeCourse.color].cover}`}></div>
+                            <div className="max-w-4xl mx-auto px-6 -mt-10">
+                                <div className="bg-white dark:bg-notion-darkDim p-8 rounded-2xl shadow-xl border dark:border-notion-darkBorder">
+                                    <h1 className="text-4xl font-bold mb-4">{activeCourse.name}</h1>
+                                    <div className="flex gap-4 text-sm text-gray-400 mb-8">
+                                        <span>{activeCourse.building} {activeCourse.room}</span>
+                                        <span>{activeCourse.schedule}</span>
                                     </div>
-
-                                    <div className="flex items-center justify-between mb-4">
-                                        <div className="flex items-center gap-2 text-sm text-gray-400">
-                                            <button onClick={() => setCurrentFolderId(null)} className={!currentFolderId ? 'text-black dark:text-white font-bold' : ''}>Home</button>
-                                            {breadcrumbs.map(f => (<React.Fragment key={f.id}><Icon name="chevronRight" size={14}/> <button onClick={() => setCurrentFolderId(f.id)}>{f.title}</button></React.Fragment>))}
-                                        </div>
-                                        <div className="flex gap-1 bg-gray-100 dark:bg-notion-dark p-1 rounded-lg">
-                                            <button onClick={() => setResourceViewMode('list')} className={`p-1.5 rounded ${resourceViewMode==='list' ? 'bg-white dark:bg-[#333] shadow' : 'text-gray-400'}`}><Icon name="list" size={16}/></button>
-                                            <button onClick={() => setResourceViewMode('grid')} className={`p-1.5 rounded ${resourceViewMode==='grid' ? 'bg-white dark:bg-[#333] shadow' : 'text-gray-400'}`}><Icon name="grid" size={16}/></button>
-                                        </div>
-                                    </div>
-
-                                    <div className={resourceViewMode === 'list' ? 'space-y-1' : 'grid grid-cols-2 md:grid-cols-4 gap-4'}>
-                                        {visibleItems.map(link => (
-                                            <div key={link.id} className="group relative bg-gray-50 dark:bg-white/5 rounded-lg p-3 hover:bg-gray-100 dark:hover:bg-white/10 cursor-pointer" onClick={() => handleResourceClick(link)}>
-                                                <div className={resourceViewMode==='grid' ? "flex flex-col items-center text-center gap-2" : "flex items-center gap-4"}>
-                                                    <Icon name={link.type === 'folder' ? 'folder' : link.type==='note' ? 'alignLeft' : link.type==='file' ? 'file' : 'external'} className={link.type==='folder'?'text-gray-400':'text-blue-500'} size={resourceViewMode==='grid'?40:20} />
-                                                    <span className="font-medium truncate w-full">{link.title}</span>
-                                                </div>
-                                                <button onClick={(e) => { e.stopPropagation(); deleteResource(link.id); }} className="absolute right-2 top-2 md:top-1/2 md:-translate-y-1/2 opacity-0 group-hover:opacity-100 p-2 text-gray-400 hover:text-red-500"><Icon name="trash" size={16} /></button>
+                                    <div className="space-y-2">
+                                        {visibleItems.map(l => (
+                                            <div key={l.id} onClick={() => { if(l.type==='note'){setEditingNote(l); setNoteEditorOpen(true);} else if(l.type==='link') window.open(l.url); else if(l.fileData) setPreviewFile(l); }} className="p-3 bg-gray-50 dark:bg-white/5 rounded-lg flex items-center justify-between group cursor-pointer">
+                                                <div className="flex items-center gap-3"><Icon name={l.type==='note'?'alignLeft':'file'} className="text-blue-500" /><span>{l.title}</span></div>
+                                                <button onClick={(e) => { e.stopPropagation(); sync(courses.map(c => c.id === activeCourseId ? {...c, links: c.links.filter(li=>li.id!==l.id)} : c)); }} className="opacity-0 group-hover:opacity-100 text-red-500"><Icon name="trash" size={14} /></button>
                                             </div>
                                         ))}
                                     </div>
-                                    <button onClick={() => setShowResourceModal(true)} className="flex items-center gap-2 text-gray-500 text-sm mt-8 border-2 border-dashed dark:border-notion-darkBorder w-full p-4 rounded-xl hover:bg-gray-50 dark:hover:bg-white/5"><Icon name="plus" size={16} /> Add Note / Folder / File</button>
-                                </div>
-
-                                <div className="lg:col-span-3 space-y-8 lg:mt-24">
-                                    <div className="bg-yellow-50 dark:bg-[#2A2620] rounded-xl p-5 border dark:border-transparent">
-                                        <h3 className="font-bold text-xs uppercase tracking-wide opacity-75 mb-4 flex items-center gap-2"><Icon name="pencil" size={12}/> Scratchpad</h3>
-                                        <textarea value={activeCourse.scratchpad || ''} onChange={(e) => updateCourse(activeCourse.id, 'scratchpad', e.target.value)} className="w-full h-40 bg-transparent resize-none outline-none text-sm leading-relaxed" placeholder="Quick links or notes..."></textarea>
-                                    </div>
+                                    <button onClick={() => setShowResourceModal(true)} className="w-full mt-6 p-4 border-2 border-dashed dark:border-notion-darkBorder rounded-xl text-gray-400 flex items-center justify-center gap-2 text-sm"><Icon name="plus" /> Add Note or File</button>
                                 </div>
                             </div>
                         </div>
@@ -518,43 +304,31 @@
 
                     {/* MODALS */}
                     {noteEditorOpen && editingNote && (
-                        <div className="fixed inset-0 z-50 bg-white dark:bg-notion-dark flex flex-col animate-fade">
-                            <div className="h-14 border-b flex items-center justify-between px-8">
-                                <input value={editingNote.title} onChange={(e) => { setEditingNote({...editingNote, title: e.target.value}); saveNoteContent(editingNote.id, editingNote.content, e.target.value); }} className="text-lg font-bold bg-transparent outline-none flex-1" />
-                                <button onClick={() => setNoteEditorOpen(false)} className="bg-black text-white px-4 py-1 rounded-lg text-sm">Save & Exit</button>
+                        <div className="fixed inset-0 z-[100] bg-white dark:bg-notion-dark flex flex-col animate-fade">
+                            <div className="h-14 border-b flex items-center justify-between px-6">
+                                <input value={editingNote.title} onChange={e => setEditingNote({...editingNote, title: e.target.value})} className="font-bold bg-transparent outline-none text-xl" />
+                                <button onClick={() => { 
+                                    const updatedLinks = activeCourse.links.map(l => l.id === editingNote.id ? editingNote : l);
+                                    sync(courses.map(c => c.id === activeCourseId ? {...c, links: updatedLinks} : c));
+                                    setNoteEditorOpen(false); 
+                                }} className="bg-blue-600 text-white px-4 py-1 rounded-lg">Save</button>
                             </div>
-                            <textarea value={editingNote.content || ''} onChange={(e) => { setEditingNote({...editingNote, content: e.target.value}); saveNoteContent(editingNote.id, e.target.value, editingNote.title); }} className="flex-1 p-8 md:max-w-3xl md:mx-auto w-full bg-transparent resize-none outline-none text-base" placeholder="Start typing..." />
-                        </div>
-                    )}
-
-                    {previewFile && (
-                        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade" onClick={() => setPreviewFile(null)}>
-                            <div className="bg-white dark:bg-notion-darkDim max-w-4xl w-full max-h-[90vh] rounded-2xl overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
-                                <div className="p-4 border-b flex justify-between items-center">
-                                    <h3 className="font-bold">{previewFile.title}</h3>
-                                    <button onClick={() => setPreviewFile(null)} className="p-2 hover:bg-gray-100 rounded-full"><Icon name="x" /></button>
-                                </div>
-                                <div className="p-4 flex items-center justify-center bg-gray-100 dark:bg-black overflow-auto h-[70vh]">
-                                    {previewFile.type.includes('image') ? <img src={previewFile.url} className="max-w-full" /> : <iframe src={previewFile.url} className="w-full h-full" />}
-                                </div>
-                            </div>
+                            <textarea value={editingNote.content} onChange={e => setEditingNote({...editingNote, content: e.target.value})} className="flex-1 p-10 bg-transparent outline-none resize-none text-lg" placeholder="Start typing..." />
                         </div>
                     )}
 
                     {showResourceModal && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade">
-                            <div className="bg-white dark:bg-notion-darkDim w-full max-w-sm rounded-xl p-6 shadow-2xl">
+                        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
+                            <div className="bg-white dark:bg-notion-darkDim w-full max-w-sm p-6 rounded-2xl">
                                 <h3 className="font-bold mb-4">Add Item</h3>
-                                <div className="grid grid-cols-4 gap-1 bg-gray-100 dark:bg-[#2F2F2F] p-1 rounded-lg mb-4">
-                                    {['note', 'folder', 'link', 'file'].map(t => (
-                                        <button key={t} onClick={() => setResourceType(t)} className={`py-1.5 text-xs font-bold rounded capitalize ${resourceType===t?'bg-white dark:bg-[#444] shadow text-black dark:text-white':'text-gray-500'}`}>{t}</button>
-                                    ))}
+                                <input value={newResTitle} onChange={e => setNewResTitle(e.target.value)} className="w-full p-3 border rounded-lg mb-4 dark:bg-black" placeholder="Title" />
+                                <div className="flex gap-2 mb-4">
+                                    <button onClick={() => setResourceType('note')} className={`flex-1 p-2 rounded ${resourceType==='note'?'bg-blue-600 text-white':'bg-gray-100 dark:bg-black'}`}>Note</button>
+                                    <button onClick={() => setResourceType('file')} className={`flex-1 p-2 rounded ${resourceType==='file'?'bg-blue-600 text-white':'bg-gray-100 dark:bg-black'}`}>File</button>
                                 </div>
-                                <input value={newResTitle} onChange={e => setNewResTitle(e.target.value)} className="w-full border p-3 rounded-lg mb-3 bg-transparent outline-none focus:ring-2 focus:ring-blue-500" placeholder="Title" autoFocus />
-                                {resourceType === 'link' && <input value={newResUrl} onChange={e => setNewResUrl(e.target.value)} className="w-full border p-3 rounded-lg mb-4 bg-transparent outline-none" placeholder="https://" />}
-                                {resourceType === 'file' && <input type="file" onChange={e => setNewResFile(e.target.files[0])} className="mb-4 text-sm" />}
+                                {resourceType==='file' && <input type="file" onChange={e => setNewResFile(e.target.files[0])} className="mb-4 text-xs" />}
                                 <div className="flex gap-2">
-                                    <button onClick={() => setShowResourceModal(false)} className="flex-1 py-3 text-gray-500 font-bold">Cancel</button>
+                                    <button onClick={() => setShowResourceModal(false)} className="flex-1 py-3 text-gray-500">Cancel</button>
                                     <button onClick={saveResource} className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold">Create</button>
                                 </div>
                             </div>
@@ -562,23 +336,15 @@
                     )}
 
                     {showSettings && activeCourse && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade">
-                            <div className="bg-white dark:bg-notion-darkDim w-full max-w-md rounded-2xl p-8 shadow-2xl">
-                                <h3 className="text-xl font-bold mb-6">Course Settings</h3>
-                                <div className="space-y-6">
-                                    <div><label className="text-[10px] font-bold uppercase text-gray-400">Class Name</label><input value={activeCourse.name} onChange={e => updateCourse(activeCourse.id, 'name', e.target.value)} className="w-full p-3 border rounded-lg bg-transparent mt-1" /></div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div><label className="text-[10px] font-bold uppercase text-gray-400">Code</label><input value={activeCourse.code} onChange={e => updateCourse(activeCourse.id, 'code', e.target.value)} className="w-full p-3 border rounded-lg bg-transparent mt-1" /></div>
-                                        <div><label className="text-[10px] font-bold uppercase text-gray-400">Building</label><input value={activeCourse.building} onChange={e => updateCourse(activeCourse.id, 'building', e.target.value)} className="w-full p-3 border rounded-lg bg-transparent mt-1" /></div>
-                                        <div><label className="text-[10px] font-bold uppercase text-gray-400">Room</label><input value={activeCourse.room} onChange={e => updateCourse(activeCourse.id, 'room', e.target.value)} className="w-full p-3 border rounded-lg bg-transparent mt-1" /></div>
-                                        <div><label className="text-[10px] font-bold uppercase text-gray-400">Time</label><input value={activeCourse.schedule} onChange={e => updateCourse(activeCourse.id, 'schedule', e.target.value)} className="w-full p-3 border rounded-lg bg-transparent mt-1" /></div>
-                                    </div>
-                                    <div className="flex flex-wrap gap-3">
-                                        {Object.keys(COLORS).map(c => (<button key={c} onClick={() => updateCourse(activeCourse.id, 'color', c)} className={`w-8 h-8 rounded-full ${COLORS[c].cover} ${activeCourse.color===c?'ring-4 ring-blue-500':''}`} />))}
-                                    </div>
-                                    <div className="flex justify-between pt-6 border-t dark:border-notion-darkBorder">
-                                        <button onClick={() => deleteCourse(activeCourse.id)} className="text-red-500 text-sm font-bold hover:underline">Delete Class</button>
-                                        <button onClick={() => setShowSettings(false)} className="bg-black dark:bg-white text-white dark:text-black px-6 py-2 rounded-xl font-bold">Save Changes</button>
+                        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
+                            <div className="bg-white dark:bg-notion-darkDim w-full max-w-md p-8 rounded-2xl">
+                                <h3 className="text-xl font-bold mb-6">Class Settings</h3>
+                                <div className="space-y-4">
+                                    <input value={activeCourse.name} onChange={e => updateCourse(activeCourse.id, 'name', e.target.value)} className="w-full p-3 border rounded-lg dark:bg-black" placeholder="Name" />
+                                    <input value={activeCourse.code} onChange={e => updateCourse(activeCourse.id, 'code', e.target.value)} className="w-full p-3 border rounded-lg dark:bg-black" placeholder="Code (e.g. MATH101)" />
+                                    <div className="flex justify-between mt-8">
+                                        <button onClick={() => deleteCourse(activeCourse.id)} className="text-red-500 font-bold">Delete Class</button>
+                                        <button onClick={() => setShowSettings(false)} className="bg-black dark:bg-white text-white dark:text-black px-6 py-2 rounded-xl font-bold">Done</button>
                                     </div>
                                 </div>
                             </div>
@@ -588,8 +354,7 @@
             );
         }
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
     </script>
 </body>
 </html>
