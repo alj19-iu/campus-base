@@ -3,254 +3,294 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CampusBase | Academic Hub</title>
+    <title>CampusBase | Modern Notes</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-
     <script>
         tailwind.config = {
             darkMode: 'class',
             theme: {
                 extend: {
                     colors: {
-                        notion: {
-                            light: '#FFFFFF', dim: '#F7F7F5', dark: '#09090b',
-                            darkDim: '#18181b', border: '#E1E1E0', darkBorder: '#27272a'
+                        brand: {
+                            50: '#f0f7ff',
+                            100: '#e0effe',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            900: '#1e3a8a',
+                        },
+                        dark: {
+                            bg: '#0f172a',
+                            card: '#1e293b',
+                            border: '#334155'
                         }
-                    },
-                    fontFamily: { sans: ['Plus Jakarta Sans', 'sans-serif'] }
+                    }
                 }
             }
         }
     </script>
+    
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
     <style>
-        body { font-family: 'Plus Jakarta Sans', sans-serif; }
-        .glass { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px); }
-        .dark .glass { background: rgba(24, 24, 27, 0.7); backdrop-filter: blur(10px); }
-        .animate-in { animation: fadeIn 0.3s ease-out forwards; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 10px; }
-        .dark ::-webkit-scrollbar-thumb { background: #3f3f46; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; transition: all 0.3s ease; }
+        .glass { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.3); }
+        .dark .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .card-hover { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .card-hover:hover { transform: translateY(-4px); box-shadow: 0 12px 24px -10px rgba(0,0,0,0.1); }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .dark ::-webkit-scrollbar-thumb { background: #475569; }
     </style>
 </head>
-<body class="bg-notion-dim text-zinc-900 dark:bg-notion-dark dark:text-zinc-100 transition-colors duration-300">
+<body class="bg-[#f8fafc] text-slate-900 dark:bg-dark-bg dark:text-slate-100">
 
     <div id="root"></div>
 
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        // --- FIXED SUPABASE INITIALIZATION ---
         const supabaseUrl = 'https://kxhubxycrplzbfwaokzb.supabase.co';
         const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4aHVieHljcnBsemJmd2Fva3piIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY1MjkyNDgsImV4cCI6MjA4MjEwNTI0OH0.gUsjwwdtrzVybfvSyNF4yDyTNx4UkTO_p9FvXXWnO4k';
-        const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+        const supabase = supabase.createClient(supabaseUrl, supabaseKey);
 
-        const DB_NAME = 'CampusBaseDB_v12'; 
-        const STORE_NAME = 'courses';
-
+        // --- FIXED DB HELPER: USER-SPECIFIC STORES ---
         const dbHelper = {
-            open: () => new Promise((res, rej) => {
-                const req = indexedDB.open(DB_NAME, 1);
-                req.onupgradeneeded = (e) => {
-                    const db = e.target.result;
-                    if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-                };
-                req.onsuccess = () => res(req.result);
-                req.onerror = () => rej(req.error);
-            }),
-            getAll: async () => {
-                const db = await dbHelper.open();
-                return new Promise((res) => {
-                    const req = db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).getAll();
-                    req.onsuccess = () => res(req.result || []);
+            getStoreName: (userId) => `courses_${userId}`,
+            open: (userId) => {
+                return new Promise((resolve, reject) => {
+                    const request = indexedDB.open(`CampusBase_${userId}`, 1);
+                    request.onupgradeneeded = (e) => {
+                        const db = e.target.result;
+                        if (!db.objectStoreNames.contains('data')) db.createObjectStore('data', { keyPath: 'id' });
+                    };
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
                 });
             },
-            save: async (course) => {
-                const db = await dbHelper.open();
-                db.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).put(course);
+            getAll: async (userId) => {
+                if (!userId) return [];
+                const db = await dbHelper.open(userId);
+                return new Promise((resolve) => {
+                    const tx = db.transaction('data', 'readonly');
+                    const request = tx.objectStore('data').getAll();
+                    request.onsuccess = () => resolve(request.result || []);
+                });
             },
-            clearAll: async () => {
-                const db = await dbHelper.open();
-                db.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).clear();
+            saveAll: async (userId, courses) => {
+                if (!userId) return;
+                const db = await dbHelper.open(userId);
+                const tx = db.transaction('data', 'readwrite');
+                const store = tx.objectStore('data');
+                store.clear();
+                courses.forEach(c => store.put(c));
             }
         };
 
-        const COLORS = {
-            gray:   { bg: 'bg-zinc-100 dark:bg-zinc-800', text: 'text-zinc-600 dark:text-zinc-400', cover: 'bg-zinc-400' },
-            blue:   { bg: 'bg-blue-100 dark:bg-blue-900/30', text: 'text-blue-600 dark:text-blue-400', cover: 'bg-blue-500' },
-            purple: { bg: 'bg-purple-100 dark:bg-purple-900/30', text: 'text-purple-600 dark:text-purple-400', cover: 'bg-purple-500' },
-            red:    { bg: 'bg-red-100 dark:bg-red-900/30', text: 'text-red-600 dark:text-red-400', cover: 'bg-red-500' },
-            green:  { bg: 'bg-emerald-100 dark:bg-emerald-900/30', text: 'text-emerald-600 dark:text-emerald-400', cover: 'bg-emerald-500' }
+        const Icon = ({ name, size = 18, className = "" }) => {
+            const icons = {
+                plus: "M12 5v14M5 12h14",
+                home: "M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z",
+                folder: "M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z",
+                trash: "M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2",
+                moon: "M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z",
+                sun: "M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z",
+                logout: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9",
+                search: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z",
+                settings: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6",
+                file: "M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"
+            };
+            return (
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                    <path d={icons[name] || ""} />
+                </svg>
+            );
         };
 
         function App() {
+            const [user, setUser] = useState(null);
             const [courses, setCourses] = useState([]);
             const [loading, setLoading] = useState(true);
-            const [user, setUser] = useState(null);
             const [view, setView] = useState('dashboard');
-            const [activeId, setActiveId] = useState(null);
+            const [activeCourseId, setActiveCourseId] = useState(null);
             const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
-            
-            // Auth States
+            const [authMode, setAuthMode] = useState('login');
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
 
             useEffect(() => {
-                document.documentElement.className = theme;
+                document.documentElement.classList.toggle('dark', theme === 'dark');
                 localStorage.setItem('theme', theme);
             }, [theme]);
 
             useEffect(() => {
-                supabaseClient.auth.getSession().then(({ data: { session } }) => {
-                    if (session) { setUser(session.user); loadData(session.user.id); }
-                    else setLoading(false);
+                supabase.auth.getSession().then(({ data: { session } }) => {
+                    if (session) {
+                        setUser(session.user);
+                        loadUserData(session.user.id);
+                    } else {
+                        setLoading(false);
+                    }
                 });
+
+                const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+                    if (session) {
+                        setUser(session.user);
+                        loadUserData(session.user.id);
+                    } else {
+                        setUser(null);
+                        setCourses([]); // Clear state immediately on logout
+                        setLoading(false);
+                    }
+                });
+                return () => subscription.unsubscribe();
             }, []);
 
-            async function loadData(uid) {
-                const local = await dbHelper.getAll();
-                const { data } = await supabaseClient.from('courses').select('data').eq('user_id', uid).maybeSingle();
+            const loadUserData = async (userId) => {
+                setLoading(true);
+                // 1. Try cloud first
+                const { data } = await supabase.from('courses').select('data').eq('user_id', userId).maybeSingle();
+                
                 if (data?.data) {
                     setCourses(data.data);
-                    for (const c of data.data) await dbHelper.save(c);
+                    await dbHelper.saveAll(userId, data.data);
                 } else {
+                    // 2. Fallback to user-specific IndexedDB
+                    const local = await dbHelper.getAll(userId);
                     setCourses(local);
                 }
                 setLoading(false);
-            }
-
-            async function sync(updated) {
-                setCourses(updated);
-                if (user) {
-                    await supabaseClient.from('courses').upsert({ user_id: user.id, data: updated, updated_at: new Date() }, { onConflict: 'user_id' });
-                }
-                updated.forEach(c => dbHelper.save(c));
-            }
-
-            // --- DATA LEAK PREVENTION FIX ---
-            const handleLogout = async () => {
-                await supabaseClient.auth.signOut();
-                await dbHelper.clearAll(); // Wipe local cache
-                setUser(null);
-                setCourses([]);
-                window.location.replace(window.location.href); // Hard refresh to clear memory
             };
 
-            const activeCourse = courses.find(c => c.id === activeId);
+            const sync = async (updated) => {
+                setCourses(updated);
+                if (!user) return;
+                await dbHelper.saveAll(user.id, updated);
+                await supabase.from('courses').upsert({ user_id: user.id, data: updated, updated_at: new Date() });
+            };
 
-            if (loading) return <div className="h-screen flex items-center justify-center font-black tracking-tighter text-2xl animate-pulse text-zinc-400">CAMPUSBASE</div>;
+            const handleAuth = async (e) => {
+                e.preventDefault();
+                const { error } = authMode === 'login' 
+                    ? await supabase.auth.signInWithPassword({ email, password })
+                    : await supabase.auth.signUp({ email, password });
+                if (error) alert(error.message);
+            };
+
+            if (loading) return <div className="h-screen flex items-center justify-center dark:bg-dark-bg text-brand-500 font-bold animate-pulse">Loading Your Space...</div>;
 
             if (!user) return (
-                <div className="min-h-screen flex items-center justify-center p-6 bg-zinc-50 dark:bg-zinc-950">
-                    <div className="w-full max-w-md p-10 glass rounded-[2.5rem] shadow-2xl border border-white dark:border-zinc-800">
-                        <div className="flex justify-center mb-10">
-                            <div className="w-16 h-16 bg-black dark:bg-white text-white dark:text-black rounded-2xl flex items-center justify-center text-3xl font-black">CB</div>
+                <div className="min-h-screen flex items-center justify-center p-6 bg-gradient-to-br from-brand-50 to-white dark:from-dark-bg dark:to-slate-900">
+                    <div className="w-full max-w-md p-8 glass rounded-3xl shadow-2xl border border-white/20">
+                        <div className="w-16 h-16 bg-brand-500 rounded-2xl mb-6 flex items-center justify-center shadow-lg shadow-brand-500/30">
+                            <Icon name="home" size={32} className="text-white" />
                         </div>
-                        <h1 className="text-2xl font-extrabold text-center mb-8 tracking-tight">Academic Hub</h1>
-                        <div className="space-y-4">
-                            <input type="email" placeholder="Email" className="w-full p-4 bg-white/50 dark:bg-black/50 border dark:border-zinc-800 rounded-2xl outline-none" onChange={e => setEmail(e.target.value)} />
-                            <input type="password" placeholder="Password" className="w-full p-4 bg-white/50 dark:bg-black/50 border dark:border-zinc-800 rounded-2xl outline-none" onChange={e => setPassword(e.target.value)} />
-                            <button onClick={() => supabaseClient.auth.signInWithPassword({email, password})} className="w-full py-4 bg-black dark:bg-white text-white dark:text-black rounded-2xl font-bold shadow-xl hover:scale-[1.02] transition-transform">Sign In</button>
-                            <button onClick={() => supabaseClient.auth.signUp({email, password})} className="w-full text-center text-sm font-semibold text-zinc-400">Create new account</button>
-                        </div>
+                        <h2 className="text-4xl font-extrabold tracking-tight mb-2">{authMode === 'login' ? 'Welcome' : 'Join Us'}</h2>
+                        <p className="text-slate-500 mb-8">Access your academic command center.</p>
+                        <form onSubmit={handleAuth} className="space-y-4">
+                            <input type="email" placeholder="Email" className="w-full p-4 rounded-xl bg-white/50 dark:bg-dark-card border border-slate-200 dark:border-dark-border outline-none focus:ring-2 focus:ring-brand-500" onChange={e => setEmail(e.target.value)} />
+                            <input type="password" placeholder="Password" className="w-full p-4 rounded-xl bg-white/50 dark:bg-dark-card border border-slate-200 dark:border-dark-border outline-none focus:ring-2 focus:ring-brand-500" onChange={e => setPassword(e.target.value)} />
+                            <button className="w-full py-4 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-brand-600/20">
+                                {authMode === 'login' ? 'Sign In' : 'Create Account'}
+                            </button>
+                        </form>
+                        <button onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')} className="w-full mt-6 text-sm font-medium text-brand-600">
+                            {authMode === 'login' ? "New here? Create an account" : "Already have an account? Sign in"}
+                        </button>
                     </div>
                 </div>
             );
 
             return (
-                <div className="min-h-screen pb-20">
-                    <nav className="max-w-7xl mx-auto p-6 flex items-center justify-between sticky top-0 z-50">
-                        <div className="glass px-5 py-2.5 rounded-2xl border border-white/50 dark:border-zinc-800/50 flex items-center gap-3 cursor-pointer" onClick={() => setView('dashboard')}>
-                            <div className="w-7 h-7 bg-black dark:bg-white text-white dark:text-black rounded-lg flex items-center justify-center font-black text-xs">CB</div>
-                            <span className="font-extrabold tracking-tighter">CampusBase</span>
+                <div className="min-h-screen flex">
+                    {/* --- SIDEBAR --- */}
+                    <aside className="w-20 lg:w-64 border-r border-slate-200 dark:border-dark-border hidden md:flex flex-col p-4 bg-white dark:bg-dark-bg z-30">
+                        <div className="flex items-center gap-3 px-2 mb-10">
+                            <div className="w-10 h-10 bg-brand-600 rounded-xl flex items-center justify-center text-white font-bold">C</div>
+                            <span className="font-bold text-xl hidden lg:block tracking-tight">CampusBase</span>
                         </div>
-                        <div className="flex gap-3">
-                            <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} className="p-2.5 glass rounded-xl border border-white/50 dark:border-zinc-800/50">{theme === 'light' ? '🌙' : '☀️'}</button>
-                            <button onClick={handleLogout} className="px-5 py-2.5 glass rounded-xl border border-white/50 dark:border-zinc-800/50 text-red-500 font-bold text-sm">Logout</button>
-                        </div>
-                    </nav>
+                        
+                        <nav className="flex-1 space-y-2">
+                            <button onClick={() => setView('dashboard')} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${view === 'dashboard' ? 'bg-brand-50 text-brand-600 dark:bg-brand-500/10' : 'hover:bg-slate-100 dark:hover:bg-white/5'}`}>
+                                <Icon name="home" /> <span className="hidden lg:block font-medium">Dashboard</span>
+                            </button>
+                            <div className="pt-4 pb-2 px-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden lg:block">Your Courses</div>
+                            {courses.map(c => (
+                                <button key={c.id} onClick={() => { setActiveCourseId(c.id); setView('course'); }} className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 transition-all">
+                                    <div className={`w-2 h-2 rounded-full bg-brand-500`}></div>
+                                    <span className="hidden lg:block truncate text-sm font-medium">{c.name}</span>
+                                </button>
+                            ))}
+                        </nav>
 
-                    <main className="max-w-7xl mx-auto px-6 mt-10">
+                        <div className="mt-auto space-y-2 border-t border-slate-100 dark:border-dark-border pt-4">
+                            <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 transition-all">
+                                <Icon name={theme === 'light' ? 'moon' : 'sun'} /> <span className="hidden lg:block text-sm font-medium">Theme</span>
+                            </button>
+                            <button onClick={() => supabase.auth.signOut()} className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-red-50 text-red-500 transition-all">
+                                <Icon name="logout" /> <span className="hidden lg:block text-sm font-medium">Logout</span>
+                            </button>
+                        </div>
+                    </aside>
+
+                    {/* --- MAIN CONTENT --- */}
+                    <main className="flex-1 h-screen overflow-y-auto bg-[#f8fafc] dark:bg-dark-bg">
                         {view === 'dashboard' ? (
-                            <div className="animate-in">
-                                <div className="flex justify-between items-end mb-12">
-                                    <h1 className="text-5xl font-black tracking-tighter">My Courses</h1>
+                            <div className="max-w-6xl mx-auto p-8 animate-fade">
+                                <header className="flex justify-between items-center mb-10">
+                                    <div>
+                                        <h1 className="text-3xl font-extrabold tracking-tight">Welcome Back</h1>
+                                        <p className="text-slate-500">You have {courses.length} active courses this semester.</p>
+                                    </div>
                                     <button onClick={() => {
-                                        const n = { id: 'c_'+Date.now(), name: 'New Course', code: '101', color: 'blue', items: [], scratchpad: '', building: 'TBD' };
-                                        sync([...courses, n]); setActiveId(n.id); setView('course');
-                                    }} className="bg-black dark:bg-white text-white dark:text-black px-8 py-4 rounded-2xl font-black shadow-2xl hover:scale-105 transition-transform">+ New Class</button>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                                    {courses.map(c => (
-                                        <div key={c.id} onClick={() => { setActiveId(c.id); setView('course'); }} className="group bg-white dark:bg-zinc-900/50 rounded-[2.5rem] overflow-hidden border border-zinc-200 dark:border-zinc-800 cursor-pointer hover:shadow-2xl transition-all">
-                                            <div className={`h-32 ${COLORS[c.color || 'gray'].cover} opacity-80 group-hover:opacity-100 transition-opacity`}></div>
-                                            <div className="p-8">
-                                                <div className={`inline-block px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest mb-4 ${COLORS[c.color || 'gray'].bg} ${COLORS[c.color || 'gray'].text}`}>{c.code}</div>
-                                                <h3 className="text-2xl font-bold mb-2 tracking-tight">{c.name}</h3>
-                                                <p className="text-zinc-400 font-medium text-sm flex items-center gap-2">📍 {c.building}</p>
+                                        const newC = { id: Date.now().toString(), name: 'New Course', code: 'CODE101', links: [], scratchpad: '', color: 'blue' };
+                                        sync([...courses, newC]);
+                                    }} className="px-6 py-3 bg-brand-600 text-white rounded-2xl font-bold flex items-center gap-2 shadow-lg shadow-brand-600/20 hover:scale-105 transition-transform">
+                                        <Icon name="plus" size={20} /> Add Class
+                                    </button>
+                                </header>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {courses.map(course => (
+                                        <div key={course.id} onClick={() => { setActiveCourseId(course.id); setView('course'); }} 
+                                            class="glass rounded-3xl p-6 cursor-pointer card-hover group border-none">
+                                            <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center shadow-sm mb-4 group-hover:bg-brand-600 group-hover:text-white transition-colors">
+                                                <Icon name="folder" />
+                                            </div>
+                                            <div className="text-[10px] font-bold text-brand-600 uppercase mb-1 tracking-widest">{course.code}</div>
+                                            <h3 className="text-xl font-bold mb-4">{course.name}</h3>
+                                            <div className="flex items-center justify-between text-slate-400 text-xs">
+                                                <span>{course.links.length} Resources</span>
+                                                <div className="flex -space-x-2">
+                                                    {[1,2,3].map(i => <div key={i} className="w-6 h-6 rounded-full border-2 border-white dark:border-slate-800 bg-slate-200"></div>)}
+                                                </div>
                                             </div>
                                         </div>
                                     ))}
                                 </div>
                             </div>
                         ) : (
-                            <div className="animate-in">
-                                <button onClick={() => setView('dashboard')} className="mb-8 font-bold text-zinc-400 hover:text-black dark:hover:text-white flex items-center gap-2 transition-colors">← Back to Dashboard</button>
-                                <div className={`h-64 w-full rounded-[3rem] ${COLORS[activeCourse.color].cover} mb-[-4rem] shadow-2xl`}></div>
-                                <div className="max-w-5xl mx-auto px-4">
-                                    <div className="glass p-12 rounded-[3rem] border border-white dark:border-zinc-800 shadow-2xl">
-                                        <div className="flex justify-between items-start mb-10">
-                                            <div>
-                                                <div className={`inline-block px-4 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest mb-4 ${COLORS[activeCourse.color].bg} ${COLORS[activeCourse.color].text}`}>{activeCourse.code}</div>
-                                                <h1 className="text-6xl font-black tracking-tighter mb-4">{activeCourse.name}</h1>
-                                                <div className="flex gap-6 text-sm font-bold text-zinc-400">
-                                                    <span>📍 {activeCourse.building}</span>
-                                                    <span>⏰ {activeCourse.schedule || 'No Schedule'}</span>
-                                                </div>
+                            <div className="p-8">
+                                <button onClick={() => setView('dashboard')} className="mb-6 flex items-center gap-2 text-slate-500 hover:text-brand-600 transition-colors">
+                                    <Icon name="plus" className="rotate-45" size={16}/> Back to Dashboard
+                                </button>
+                                <div className="glass p-8 rounded-[2rem] min-h-[70vh]">
+                                    <h2 className="text-4xl font-black mb-6">{courses.find(c => c.id === activeCourseId)?.name}</h2>
+                                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                        <div className="lg:col-span-2 space-y-4">
+                                            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-white/5 border border-dashed border-slate-200 dark:border-white/10 text-center text-slate-400">
+                                                Click "Add" to upload resources to this course.
                                             </div>
-                                            <button onClick={() => {
-                                                const n = prompt("Course Name:", activeCourse.name);
-                                                if(n) sync(courses.map(c => c.id === activeId ? {...c, name: n} : c));
-                                            }} className="p-4 glass rounded-2xl border border-zinc-200 dark:border-zinc-800">⚙️</button>
                                         </div>
-
-                                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 mt-12">
-                                            <div className="lg:col-span-2">
-                                                <h3 className="text-xs font-black uppercase tracking-widest text-zinc-400 mb-6">Course Items</h3>
-                                                <div className="space-y-3">
-                                                    {(activeCourse.items || []).map(item => (
-                                                        <div key={item.id} className="p-5 glass rounded-[1.5rem] flex items-center justify-between border border-zinc-100 dark:border-zinc-800/50 group">
-                                                            <div className="flex items-center gap-4">
-                                                                <span className="text-2xl">📄</span>
-                                                                <span className="font-bold">{item.title}</span>
-                                                            </div>
-                                                            <button onClick={() => sync(courses.map(c => c.id === activeId ? {...c, items: c.items.filter(i => i.id !== item.id)} : c))} className="text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
-                                                        </div>
-                                                    ))}
-                                                    <button onClick={() => {
-                                                        const t = prompt("Note Title:");
-                                                        if(t) sync(courses.map(c => c.id === activeId ? {...c, items: [...(c.items||[]), {id: Date.now(), title: t, type: 'note'}]} : c));
-                                                    }} className="w-full p-5 border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-[1.5rem] font-bold text-zinc-400 hover:border-zinc-400 transition-all">+ Add New Item</button>
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <div className="bg-amber-50 dark:bg-amber-900/10 p-8 rounded-[2rem] border border-amber-100 dark:border-amber-900/20">
-                                                    <h3 className="text-[10px] font-black uppercase text-amber-600 mb-4 tracking-tighter">Sticky Scratchpad</h3>
-                                                    <textarea 
-                                                        className="w-full h-64 bg-transparent outline-none resize-none text-sm font-semibold leading-relaxed"
-                                                        placeholder="Office hours, building codes..."
-                                                        defaultValue={activeCourse.scratchpad}
-                                                        onBlur={(e) => sync(courses.map(c => c.id === activeId ? {...c, scratchpad: e.target.value} : c))}
-                                                    />
-                                                </div>
-                                            </div>
+                                        <div className="bg-brand-50/50 dark:bg-brand-500/5 p-6 rounded-3xl">
+                                            <h4 className="font-bold text-brand-900 dark:text-brand-100 mb-4 flex items-center gap-2">
+                                                <Icon name="settings" size={16}/> Quick Scratchpad
+                                            </h4>
+                                            <textarea className="w-full h-64 bg-transparent resize-none border-none outline-none text-sm leading-relaxed" placeholder="Type notes here..."></textarea>
                                         </div>
                                     </div>
                                 </div>
