@@ -7,10 +7,10 @@
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
     <script>
         tailwind.config = {
@@ -18,9 +18,7 @@
             theme: {
                 extend: {
                     fontFamily: { sans: ['Plus Jakarta Sans', 'sans-serif'] },
-                    colors: {
-                        dark: { bg: '#09090b', card: '#121217', border: '#27272a' }
-                    }
+                    colors: { dark: { bg: '#09090b', card: '#121217', border: '#27272a' } }
                 }
             }
         }
@@ -29,12 +27,12 @@
         body { transition: background-color 0.4s; overflow-x: hidden; }
         .glass { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.3); }
         .dark .glass { background: rgba(18, 18, 23, 0.8); backdrop-filter: blur(16px); border: 1px solid rgba(39, 39, 42, 0.5); }
-        .animate-in { animation: scaleIn 0.2s ease-out forwards; }
-        @keyframes scaleIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .preview-overlay { background: rgba(0,0,0,0.85); backdrop-filter: blur(10px); z-index: 1000; }
+        .animate-pop { animation: pop 0.2s ease-out forwards; }
+        @keyframes pop { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
     </style>
 </head>
-<body class="bg-[#fcfcfd] text-slate-900 dark:bg-dark-bg dark:text-zinc-100 min-h-screen font-sans">
+<body class="bg-[#fcfcfd] text-slate-900 dark:bg-dark-bg dark:text-zinc-100 min-h-screen">
 
     <div id="root"></div>
 
@@ -48,24 +46,22 @@
         const COLORS = {
             blue:   { hex: '#3b82f6', bg: 'bg-blue-500', text: 'text-blue-500', light: 'bg-blue-50 dark:bg-blue-500/10' },
             purple: { hex: '#a855f7', bg: 'bg-purple-500', text: 'text-purple-500', light: 'bg-purple-50 dark:bg-purple-500/10' },
-            green:  { hex: '#10b981', bg: 'bg-emerald-500', text: 'text-emerald-500', light: 'bg-emerald-50 dark:bg-emerald-500/10' },
+            emerald:{ hex: '#10b981', bg: 'bg-emerald-500', text: 'text-emerald-500', light: 'bg-emerald-50 dark:bg-emerald-500/10' },
             rose:   { hex: '#f43f5e', bg: 'bg-rose-500', text: 'text-rose-500', light: 'bg-rose-50 dark:bg-rose-500/10' },
             amber:  { hex: '#f59e0b', bg: 'bg-amber-500', text: 'text-amber-500', light: 'bg-amber-50 dark:bg-amber-500/10' },
         };
 
         const Icon = ({ name, size = 20, className = "" }) => {
             const icons = {
-                plus: "M12 5v14M5 12h14", arrowLeft: "M19 12H5M12 19l-7-7 7-7",
+                plus: "M12 5v14M5 12h14", back: "M19 12H5M12 19l-7-7 7-7",
                 file: "M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z",
                 folder: "M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z",
                 trash: "M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2",
                 settings: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6", x: "M18 6L6 18M6 6l12 12",
-                moon: "M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z", 
-                sun: "M12 1v2M12 21v2M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z",
-                search: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z",
+                moon: "M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z", sun: "M12 1v2M12 21v2M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z",
                 logout: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9",
                 upload: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12",
-                chevronRight: "M9 18l6-6-6-6", edit: "M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
+                chevron: "M9 18l6-6-6-6", note: "M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
             };
             return (
                 <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -77,20 +73,18 @@
         function App() {
             const [user, setUser] = useState(null);
             const [courses, setCourses] = useState([]);
-            const [view, setView] = useState('dashboard'); // dashboard, course
+            const [view, setView] = useState('dashboard');
             const [activeId, setActiveId] = useState(null);
             const [folderId, setFolderId] = useState(null);
             const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
             const [loading, setLoading] = useState(true);
-            const [previewItem, setPreviewItem] = useState(null);
-            const [editingNote, setEditingNote] = useState(null);
+            const [preview, setPreview] = useState(null);
+            const [note, setNote] = useState(null);
             const [showSettings, setShowSettings] = useState(false);
-            const [search, setSearch] = useState('');
-
-            // Auth
+            
+            // Auth Inputs
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
-            const [authMode, setAuthMode] = useState('login');
 
             useEffect(() => {
                 document.documentElement.className = theme;
@@ -104,7 +98,7 @@
                 });
                 const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => {
                     if (s) { setUser(s.user); loadData(s.user.id); }
-                    else { setUser(null); setCourses([]); setLoading(false); window.location.reload(); }
+                    else { window.location.reload(); }
                 });
                 return () => subscription.unsubscribe();
             }, []);
@@ -125,34 +119,18 @@
                 if (!file) return;
                 const reader = new FileReader();
                 reader.onload = (ev) => {
-                    const item = {
-                        id: Date.now().toString(),
-                        name: file.name,
-                        type: 'file',
-                        mime: file.type,
-                        data: ev.target.result,
-                        size: (file.size / 1024).toFixed(1) + ' KB',
-                        parentId: folderId,
-                        date: new Date().toLocaleDateString()
-                    };
+                    const item = { id: Date.now().toString(), name: file.name, type: 'file', mime: file.type, data: ev.target.result, size: (file.size / 1024).toFixed(1) + ' KB', parentId: folderId };
                     const updated = courses.map(c => c.id === activeId ? { ...c, items: [...(c.items || []), item] } : c);
                     sync(updated);
                 };
                 reader.readAsDataURL(file);
             };
 
-            const addItem = (type, name = "") => {
-                const title = name || (type === 'folder' ? 'New Folder' : 'Untitled Note');
-                const item = { id: Date.now().toString(), name: title, type, parentId: folderId, content: '', date: new Date().toLocaleDateString() };
+            const addItem = (type, name) => {
+                const item = { id: Date.now().toString(), name: name || 'Untitled', type, parentId: folderId, content: '' };
                 const updated = courses.map(c => c.id === activeId ? { ...c, items: [...(c.items || []), item] } : c);
                 sync(updated);
-                if (type === 'note') setEditingNote(item);
-            };
-
-            const updateNote = () => {
-                const updated = courses.map(c => c.id === activeId ? { ...c, items: c.items.map(i => i.id === editingNote.id ? editingNote : i) } : c);
-                sync(updated);
-                setEditingNote(null);
+                if (type === 'note') setNote(item);
             };
 
             const activeCourse = courses.find(c => c.id === activeId);
@@ -160,38 +138,36 @@
             const folderPath = useMemo(() => {
                 if (!activeCourse || !folderId) return [];
                 const path = [];
-                let currId = folderId;
-                while(currId) {
-                    const f = activeCourse.items.find(i => i.id === currId);
-                    if (f) { path.unshift(f); currId = f.parentId; }
-                    else break;
+                let curr = folderId;
+                while(curr) {
+                    const f = activeCourse.items.find(i => i.id === curr);
+                    if (f) { path.unshift(f); curr = f.parentId; } else break;
                 }
                 return path;
             }, [activeCourse, folderId]);
 
-            if (loading) return <div className="h-screen flex items-center justify-center dark:bg-dark-bg font-black text-2xl animate-pulse italic">CAMPUSBASE</div>;
+            if (loading) return <div className="h-screen flex items-center justify-center font-black text-3xl italic tracking-tighter">CAMPUSBASE</div>;
 
             if (!user) return (
-                <div className="min-h-screen flex items-center justify-center p-6 bg-[#fcfcfd] dark:bg-dark-bg">
-                    <div className="w-full max-w-md p-10 glass rounded-[2.5rem] shadow-2xl animate-in">
+                <div className="min-h-screen flex items-center justify-center p-6 bg-[#fcfcfd] dark:bg-dark-bg transition-colors">
+                    <div className="w-full max-w-md p-10 glass rounded-[2.5rem] shadow-2xl animate-pop">
                         <div className="mb-10 text-center">
                             <div className="w-20 h-20 bg-black dark:bg-white text-white dark:text-black rounded-3xl flex items-center justify-center font-black text-3xl mx-auto mb-6 shadow-2xl">CB</div>
                             <h1 className="text-3xl font-black tracking-tight">CampusBase</h1>
-                            <p className="text-slate-400 mt-2 font-medium">Your academic workspace, secured.</p>
                         </div>
-                        <form onSubmit={async (e) => { e.preventDefault(); const {error} = authMode === 'login' ? await supabase.auth.signInWithPassword({email, password}) : await supabase.auth.signUp({email, password}); if(error) alert(error.message); }} className="space-y-4">
-                            <input type="email" placeholder="Email" className="w-full p-4 bg-white/50 dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800 rounded-2xl outline-none focus:ring-2 ring-black/5" onChange={e => setEmail(e.target.value)} />
-                            <input type="password" placeholder="Password" className="w-full p-4 bg-white/50 dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800 rounded-2xl outline-none focus:ring-2 ring-black/5" onChange={e => setPassword(e.target.value)} />
-                            <button className="w-full py-4 bg-black dark:bg-white text-white dark:text-black rounded-2xl font-bold transition-all active:scale-95">Continue</button>
-                        </form>
-                        <button onClick={() => setAuthMode(authMode==='login'?'signup':'login')} className="w-full mt-6 text-sm font-bold text-slate-400 hover:text-black dark:hover:text-white transition-colors">{authMode === 'login' ? "Need an account? Sign up" : "Already have an account? Sign in"}</button>
+                        <div className="space-y-4">
+                            <input type="email" placeholder="Email" className="w-full p-4 glass rounded-2xl outline-none" onChange={e => setEmail(e.target.value)} />
+                            <input type="password" placeholder="Password" className="w-full p-4 glass rounded-2xl outline-none" onChange={e => setPassword(e.target.value)} />
+                            <button onClick={() => supabase.auth.signInWithPassword({email, password})} className="w-full py-4 bg-black dark:bg-white text-white dark:text-black rounded-2xl font-bold active:scale-95 transition-all">Sign In</button>
+                            <button onClick={() => supabase.auth.signUp({email, password})} className="w-full text-sm font-bold text-slate-400">Create Account</button>
+                        </div>
                     </div>
                 </div>
             );
 
             return (
                 <div className="max-w-7xl mx-auto p-4 md:p-8">
-                    {/* APP NAVIGATION */}
+                    {/* TOP NAV */}
                     <nav className="flex items-center justify-between mb-10 glass p-4 rounded-[2rem] sticky top-4 z-40">
                         <div className="flex items-center gap-4 px-2">
                             <div onClick={() => setView('dashboard')} className="w-10 h-10 bg-black dark:bg-white text-white dark:text-black rounded-xl flex items-center justify-center font-black text-lg cursor-pointer">CB</div>
@@ -204,42 +180,34 @@
                     </nav>
 
                     {view === 'dashboard' ? (
-                        <div className="animate-in">
-                            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12 px-2">
-                                <div>
-                                    <h1 className="text-5xl font-black tracking-tighter mb-4">Workspace</h1>
-                                    <div className="relative w-full md:w-80">
-                                        <Icon name="search" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16}/>
-                                        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search notes & files..." className="w-full pl-12 pr-6 py-3.5 glass rounded-2xl outline-none" />
-                                    </div>
-                                </div>
+                        <div className="animate-pop">
+                            <div className="flex justify-between items-end mb-12 px-2">
+                                <h1 className="text-5xl font-black tracking-tighter">My Hub</h1>
                                 <button onClick={() => {
-                                    const n = { id: Date.now().toString(), name: 'New Course', code: 'NEW101', color: 'blue', items: [], scratchpad: '', building: '', room: '' };
-                                    sync([...courses, n]);
-                                    setActiveId(n.id); setView('course'); setShowSettings(true);
-                                }} className="bg-black dark:bg-white text-white dark:text-black px-8 py-4 rounded-2xl font-black flex items-center gap-2 hover:scale-105 transition-transform"><Icon name="plus" size={18}/> New Course</button>
+                                    const n = { id: Date.now().toString(), name: 'New Course', code: 'CODE101', color: 'blue', items: [], scratchpad: '' };
+                                    sync([...courses, n]); setActiveId(n.id); setView('course'); setShowSettings(true);
+                                }} className="bg-black dark:bg-white text-white dark:text-black px-8 py-4 rounded-2xl font-black hover:scale-105 transition-transform"><Icon name="plus" size={18}/></button>
                             </div>
-
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                                {courses.filter(c => c.name.toLowerCase().includes(search.toLowerCase()) || c.code.toLowerCase().includes(search.toLowerCase())).map(c => (
-                                    <div key={c.id} onClick={() => { setActiveId(c.id); setView('course'); setFolderId(null); }} className="group glass rounded-[2.5rem] p-8 cursor-pointer hover:shadow-2xl transition-all relative overflow-hidden border-t-8" style={{ borderTopColor: COLORS[c.color || 'blue'].hex }}>
-                                        <div className={`text-[10px] font-black uppercase tracking-widest ${COLORS[c.color || 'blue'].text} mb-4 ${COLORS[c.color || 'blue'].light} px-3 py-1.5 rounded-full inline-block`}>{c.code}</div>
+                                {courses.map(c => (
+                                    <div key={c.id} onClick={() => { setActiveId(c.id); setView('course'); setFolderId(null); }} className={`group glass rounded-[2.5rem] p-8 cursor-pointer hover:shadow-2xl transition-all relative border-t-8`} style={{ borderTopColor: COLORS[c.color || 'blue'].hex }}>
+                                        <div className={`text-[10px] font-black uppercase tracking-widest ${COLORS[c.color || 'blue'].text} mb-4`}>{c.code}</div>
                                         <h3 className="text-2xl font-black mb-4 truncate">{c.name}</h3>
-                                        <div className="flex items-center text-sm font-bold text-slate-400">{(c.items || []).length} Resources</div>
+                                        <div className="text-sm font-bold text-slate-400">{(c.items || []).length} resources</div>
                                     </div>
                                 ))}
                             </div>
                         </div>
                     ) : (
-                        <div className="animate-in">
+                        <div className="animate-pop">
                             <div className="flex items-center gap-4 mb-8">
-                                <button onClick={() => setView('dashboard')} className="p-3 glass rounded-2xl hover:text-black dark:hover:text-white"><Icon name="arrowLeft" size={18}/></button>
-                                <div className="flex items-center gap-2 text-sm font-bold text-slate-400 overflow-x-auto no-scrollbar whitespace-nowrap">
-                                    <span onClick={() => setFolderId(null)} className="cursor-pointer hover:text-black dark:hover:text-white transition-colors">Home</span>
+                                <button onClick={() => setView('dashboard')} className="p-3 glass rounded-2xl"><Icon name="back" size={18}/></button>
+                                <div className="flex items-center gap-2 text-sm font-bold text-slate-400">
+                                    <span onClick={() => setFolderId(null)} className="cursor-pointer hover:text-black dark:hover:text-white">Home</span>
                                     {folderPath.map(f => (
                                         <React.Fragment key={f.id}>
-                                            <Icon name="chevronRight" size={14}/>
-                                            <span onClick={() => setFolderId(f.id)} className="cursor-pointer hover:text-black dark:hover:text-white max-w-[120px] truncate">{f.name}</span>
+                                            <Icon name="chevron" size={12}/>
+                                            <span onClick={() => setFolderId(f.id)} className="cursor-pointer hover:text-black dark:hover:text-white truncate max-w-[100px]">{f.name}</span>
                                         </React.Fragment>
                                     ))}
                                 </div>
@@ -247,126 +215,89 @@
 
                             <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
                                 <div className="lg:col-span-8">
-                                    <div className="flex items-end justify-between mb-10 px-2">
-                                        <div>
-                                            <h1 className="text-5xl font-black tracking-tighter mb-2">{activeCourse.name}</h1>
-                                            <p className="text-slate-400 font-bold uppercase text-xs tracking-[0.2em]">{activeCourse.code} • {activeCourse.building} {activeCourse.room}</p>
-                                        </div>
+                                    <div className="flex items-end justify-between mb-10">
+                                        <h1 className="text-5xl font-black tracking-tighter">{activeCourse.name}</h1>
                                         <button onClick={() => setShowSettings(true)} className="p-4 glass rounded-2xl"><Icon name="settings"/></button>
                                     </div>
-
-                                    {/* TOOLBAR */}
-                                    <div className="flex flex-wrap gap-3 mb-8 px-2">
-                                        <button onClick={() => { const n = prompt('Folder Name:'); if(n) addItem('folder', n); }} className="flex-1 min-w-[140px] glass p-4 rounded-2xl flex items-center justify-center gap-3 font-bold hover:bg-white dark:hover:bg-zinc-800 transition-all">
+                                    <div className="flex gap-4 mb-8">
+                                        <button onClick={() => { const n = prompt('Folder Name:'); if(n) addItem('folder', n); }} className="flex-1 glass p-4 rounded-2xl flex items-center justify-center gap-3 font-bold hover:bg-white dark:hover:bg-zinc-800 transition-all">
                                             <Icon name="folder" className={COLORS[activeCourse.color].text}/> Folder
                                         </button>
-                                        <button onClick={() => addItem('note')} className="flex-1 min-w-[140px] glass p-4 rounded-2xl flex items-center justify-center gap-3 font-bold hover:bg-white dark:hover:bg-zinc-800 transition-all">
-                                            <Icon name="edit" className={COLORS[activeCourse.color].text}/> Note
+                                        <button onClick={() => addItem('note')} className="flex-1 glass p-4 rounded-2xl flex items-center justify-center gap-3 font-bold hover:bg-white dark:hover:bg-zinc-800 transition-all">
+                                            <Icon name="note" className={COLORS[activeCourse.color].text}/> Note
                                         </button>
-                                        <label className="flex-1 min-w-[140px] glass p-4 rounded-2xl flex items-center justify-center gap-3 cursor-pointer hover:bg-white dark:hover:bg-zinc-800 transition-all font-bold">
+                                        <label className="flex-1 glass p-4 rounded-2xl flex items-center justify-center gap-3 cursor-pointer hover:bg-white dark:hover:bg-zinc-800 transition-all font-bold">
                                             <input type="file" className="hidden" onChange={handleUpload} />
                                             <Icon name="upload" className={COLORS[activeCourse.color].text}/> Upload
                                         </label>
                                     </div>
-
-                                    {/* RESOURCE GRID */}
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         {currentItems.map(item => (
                                             <div key={item.id} onClick={() => {
                                                 if(item.type === 'folder') setFolderId(item.id);
-                                                else if(item.type === 'note') setEditingNote(item);
-                                                else setPreviewItem(item);
+                                                else if(item.type === 'note') setNote(item);
+                                                else setPreview(item);
                                             }} className="glass p-5 rounded-3xl flex items-center justify-between group cursor-pointer hover:shadow-xl transition-all">
                                                 <div className="flex items-center gap-4 min-w-0">
-                                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${item.type === 'folder' ? 'bg-amber-100 dark:bg-amber-500/10 text-amber-500' : item.type === 'note' ? 'bg-blue-100 dark:bg-blue-500/10 text-blue-500' : 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-500'}`}>
-                                                        <Icon name={item.type === 'folder' ? 'folder' : item.type === 'note' ? 'edit' : 'file'} />
+                                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${item.type === 'folder' ? 'bg-amber-100 dark:bg-amber-500/10 text-amber-500' : 'bg-blue-100 dark:bg-blue-500/10 text-blue-500'}`}>
+                                                        <Icon name={item.type === 'folder' ? 'folder' : item.type === 'note' ? 'note' : 'file'} />
                                                     </div>
                                                     <div className="min-w-0">
                                                         <div className="font-bold truncate text-sm">{item.name}</div>
                                                         <div className="text-[10px] font-black text-slate-400 uppercase">{item.type === 'file' ? item.size : item.type}</div>
                                                     </div>
                                                 </div>
-                                                <button onClick={(e) => { e.stopPropagation(); sync(courses.map(c => c.id === activeId ? {...c, items: c.items.filter(i => i.id !== item.id)} : c)); }} className="opacity-0 group-hover:opacity-100 p-2 text-red-500 hover:scale-110 transition-all"><Icon name="trash" size={16}/></button>
+                                                <button onClick={(e) => { e.stopPropagation(); sync(courses.map(c => c.id === activeId ? {...c, items: c.items.filter(i => i.id !== item.id)} : c)); }} className="opacity-0 group-hover:opacity-100 p-2 text-red-500"><Icon name="trash" size={16}/></button>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
-
-                                {/* SIDEBAR SCRATCHPAD */}
                                 <div className="lg:col-span-4">
-                                    <div className={`p-8 glass rounded-[2.5rem] border-t-8 transition-all`} style={{ borderTopColor: COLORS[activeCourse.color].hex }}>
-                                        <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-6">Course Scratchpad</h3>
-                                        <textarea 
-                                            value={activeCourse.scratchpad || ''} 
-                                            onChange={e => sync(courses.map(c => c.id === activeId ? { ...c, scratchpad: e.target.value } : c))}
-                                            placeholder="Room codes, exam dates..."
-                                            className="w-full h-64 bg-transparent outline-none resize-none font-bold text-sm leading-relaxed"
-                                        />
+                                    <div className="p-8 glass rounded-[2.5rem] border-t-8" style={{ borderTopColor: COLORS[activeCourse.color].hex }}>
+                                        <h3 className="text-xs font-black uppercase text-slate-400 mb-6">Quick Notes</h3>
+                                        <textarea value={activeCourse.scratchpad || ''} onChange={e => sync(courses.map(c => c.id === activeId ? {...c, scratchpad: e.target.value} : c))} placeholder="Exam dates..." className="w-full h-64 bg-transparent outline-none resize-none font-bold text-sm leading-relaxed" />
                                     </div>
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {/* PREVIEW MODAL */}
-                    {previewItem && (
-                        <div className="fixed inset-0 z-[100] flex flex-col animate-in">
-                            <div className="absolute inset-0 bg-black/90 backdrop-blur-xl" onClick={() => setPreviewItem(null)}></div>
-                            <div className="relative h-16 flex items-center justify-between px-6 text-white z-10">
-                                <span className="font-bold truncate">{previewItem.name}</span>
-                                <button onClick={() => setPreviewItem(null)} className="p-2 hover:bg-white/10 rounded-full"><Icon name="x"/></button>
+                    {/* PREVIEW OVERLAY */}
+                    {preview && (
+                        <div className="fixed inset-0 preview-overlay flex flex-col p-6 animate-pop">
+                            <div className="flex justify-between text-white mb-6">
+                                <span className="font-bold">{preview.name}</span>
+                                <button onClick={() => setPreview(null)} className="p-2 bg-white/10 rounded-full"><Icon name="x"/></button>
                             </div>
-                            <div className="relative flex-1 p-4 flex items-center justify-center z-10 overflow-hidden">
-                                {previewItem.mime?.startsWith('image/') ? (
-                                    <img src={previewItem.data} className="max-w-full max-h-full rounded-xl shadow-2xl object-contain" />
-                                ) : (
-                                    <iframe src={previewItem.data} className="w-full h-full rounded-xl bg-white shadow-2xl border-none" />
-                                )}
+                            <div className="flex-1 rounded-2xl overflow-hidden bg-white">
+                                {preview.mime?.startsWith('image/') ? <img src={preview.data} className="w-full h-full object-contain" /> : <iframe src={preview.data} className="w-full h-full border-none" />}
                             </div>
                         </div>
                     )}
 
                     {/* NOTE EDITOR */}
-                    {editingNote && (
-                        <div className="fixed inset-0 z-[100] bg-white dark:bg-dark-bg flex flex-col animate-in">
-                            <div className="h-16 flex items-center justify-between px-8 border-b dark:border-white/5">
-                                <input value={editingNote.name} onChange={e => setEditingNote({...editingNote, name: e.target.value})} className="bg-transparent font-black text-xl outline-none" />
-                                <button onClick={updateNote} className="bg-black dark:bg-white text-white dark:text-black px-6 py-2 rounded-xl font-black">Save & Close</button>
+                    {note && (
+                        <div className="fixed inset-0 bg-white dark:bg-dark-bg z-50 flex flex-col animate-pop">
+                            <div className="h-20 flex items-center justify-between px-10 border-b dark:border-white/5">
+                                <input value={note.name} onChange={e => setNote({...note, name: e.target.value})} className="bg-transparent font-black text-2xl outline-none w-1/2" />
+                                <button onClick={() => { sync(courses.map(c => c.id === activeId ? {...c, items: c.items.map(i => i.id === note.id ? note : i)} : c)); setNote(null); }} className="bg-black dark:bg-white text-white dark:text-black px-8 py-3 rounded-2xl font-black">Save & Close</button>
                             </div>
-                            <textarea 
-                                value={editingNote.content} 
-                                onChange={e => setEditingNote({...editingNote, content: e.target.value})}
-                                placeholder="Start writing..."
-                                className="flex-1 p-10 md:p-20 bg-transparent outline-none text-lg leading-loose resize-none max-w-4xl mx-auto w-full font-medium"
-                                autoFocus
-                            />
+                            <textarea value={note.content} onChange={e => setNote({...note, content: e.target.value})} placeholder="Start typing..." className="flex-1 p-10 md:p-20 bg-transparent outline-none text-xl leading-loose resize-none max-w-4xl mx-auto w-full font-medium" autoFocus />
                         </div>
                     )}
 
-                    {/* COURSE SETTINGS */}
+                    {/* SETTINGS MODAL */}
                     {showSettings && (
-                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-                            <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setShowSettings(false)}></div>
-                            <div className="relative glass w-full max-w-lg rounded-[3rem] p-10 shadow-2xl animate-in">
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-md">
+                            <div className="glass w-full max-w-md rounded-[3rem] p-10 animate-pop">
                                 <h2 className="text-3xl font-black mb-8">Course Info</h2>
-                                <div className="space-y-5">
-                                    <input value={activeCourse.name} onChange={e => sync(courses.map(c => c.id === activeId ? {...c, name: e.target.value} : c))} placeholder="Course Name" className="w-full p-4 glass rounded-2xl outline-none" />
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <input value={activeCourse.code} onChange={e => sync(courses.map(c => c.id === activeId ? {...c, code: e.target.value} : c))} placeholder="Code" className="w-full p-4 glass rounded-2xl outline-none" />
-                                        <input value={`${activeCourse.building} ${activeCourse.room}`} onChange={e => {
-                                            const parts = e.target.value.split(' ');
-                                            sync(courses.map(c => c.id === activeId ? {...c, building: parts[0] || '', room: parts.slice(1).join(' ')} : c));
-                                        }} placeholder="Bldg Room" className="w-full p-4 glass rounded-2xl outline-none" />
+                                <div className="space-y-4">
+                                    <input value={activeCourse.name} onChange={e => sync(courses.map(c => c.id === activeId ? {...c, name: e.target.value} : c))} placeholder="Name" className="w-full p-4 glass rounded-2xl outline-none font-bold" />
+                                    <div className="flex gap-2 justify-center py-4">
+                                        {Object.keys(COLORS).map(c => <button key={c} onClick={() => sync(courses.map(co => co.id === activeId ? {...co, color: c} : co))} className={`w-10 h-10 rounded-xl ${COLORS[c].bg} ${activeCourse.color === c ? 'ring-4 ring-black/10' : 'opacity-30'}`}/>)}
                                     </div>
-                                    <div className="flex justify-center gap-3 py-4">
-                                        {Object.keys(COLORS).map(c => (
-                                            <button key={c} onClick={() => sync(courses.map(co => co.id === activeId ? {...co, color: c} : co))} className={`w-10 h-10 rounded-xl ${COLORS[c].bg} ${activeCourse.color === c ? 'ring-4 ring-black/10 dark:ring-white/10' : 'opacity-30'}`}/>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div className="flex justify-between mt-10">
-                                    <button onClick={() => { if(confirm('Delete course?')) { sync(courses.filter(c => c.id !== activeId)); setView('dashboard'); setShowSettings(false); } }} className="text-red-500 font-bold">Delete Hub</button>
-                                    <button onClick={() => setShowSettings(false)} className="bg-black dark:bg-white text-white dark:text-black px-10 py-3 rounded-2xl font-black">Done</button>
+                                    <button onClick={() => setShowSettings(false)} className="w-full py-4 bg-black dark:bg-white text-white dark:text-black rounded-2xl font-black">Done</button>
+                                    <button onClick={() => { if(confirm('Delete?')) { sync(courses.filter(c => c.id !== activeId)); setView('dashboard'); setShowSettings(false); }}} className="w-full text-red-500 font-bold mt-4">Delete Course</button>
                                 </div>
                             </div>
                         </div>
@@ -375,7 +306,8 @@
             );
         }
 
-        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
     </script>
 </body>
 </html>
