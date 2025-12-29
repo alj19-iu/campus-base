@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>My Notes</title>
+    <title>CampusBase</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -50,12 +50,13 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // --- SUPABASE CONFIG ---
+        // --- 1. SUPABASE CONFIG (FIXED VARIABLE NAME) ---
         const supabaseUrl = 'https://kxhubxycrplzbfwaokzb.supabase.co';
         const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4aHVieHljcnBsemJmd2Fva3piIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY1MjkyNDgsImV4cCI6MjA4MjEwNTI0OH0.gUsjwwdtrzVybfvSyNF4yDyTNx4UkTO_p9FvXXWnO4k';
-        const supabase = supabase.createClient(supabaseUrl, supabaseKey);
+        // Changed variable to 'supabaseClient' to avoid crashing the browser
+        const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
 
-        // --- INDEXED DB HELPER (For Cache Only) ---
+        // --- 2. INDEXED DB HELPER (For Local Speed Only) ---
         const DB_NAME = 'CampusBaseDB_v12'; 
         const STORE_NAME = 'courses';
 
@@ -170,12 +171,12 @@
 
             // --- AUTH & DATA LOGIC ---
             useEffect(() => {
-                supabase.auth.getSession().then(({ data: { session } }) => {
+                supabaseClient.auth.getSession().then(({ data: { session } }) => {
                     setUser(session?.user ?? null);
                     if (session?.user) loadAllData(session.user.id); else setLoading(false);
                 });
 
-                const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+                const { data: { subscription } } = supabaseClient.auth.onAuthStateChange((_event, session) => {
                     setUser(session?.user ?? null);
                     if (session?.user) {
                         loadAllData(session.user.id);
@@ -195,7 +196,7 @@
                 await dbHelper.clearAll(); 
 
                 // Fetch from Cloud
-                const { data, error } = await supabase
+                const { data, error } = await supabaseClient
                     .from('courses')
                     .select('data')
                     .eq('user_id', userId)
@@ -214,7 +215,7 @@
             const syncToCloud = async (updatedCourses) => {
                 // Update State & Local Cache first
                 setCourses(updatedCourses);
-                const { data: { user } } = await supabase.auth.getUser();
+                const { data: { user } } = await supabaseClient.auth.getUser();
                 if (!user) return;
 
                 setSaveStatus('Saving...');
@@ -224,7 +225,7 @@
                 for(const c of updatedCourses) await dbHelper.save(c);
 
                 // Update Cloud
-                const { error } = await supabase
+                const { error } = await supabaseClient
                     .from('courses')
                     .upsert({ 
                         user_id: user.id, 
@@ -235,7 +236,6 @@
                 if (error) {
                     console.error("Cloud Sync Error:", error);
                     setSaveStatus('Error saving!');
-                    alert("Sync Error: Run the SQL Script in Supabase!");
                 } else {
                     setSaveStatus('Saved to Cloud');
                     setTimeout(() => setSaveStatus(''), 2000);
@@ -246,15 +246,15 @@
                 e.preventDefault();
                 setAuthLoading(true);
                 const { error } = authMode === 'login' 
-                    ? await supabase.auth.signInWithPassword({ email, password })
-                    : await supabase.auth.signUp({ email, password });
+                    ? await supabaseClient.auth.signInWithPassword({ email, password })
+                    : await supabaseClient.auth.signUp({ email, password });
                 
                 if (error) alert(error.message);
                 setAuthLoading(false);
             };
 
             const handleLogout = async () => {
-                await supabase.auth.signOut();
+                await supabaseClient.auth.signOut();
                 // onAuthStateChange handles the wiping
             };
 
@@ -406,7 +406,7 @@
                                     )}
                                 </div>
                                 <div className="flex gap-4 items-center">
-                                    <span className="text-xs text-green-500 font-bold">{saveStatus}</span>
+                                    <span className={`text-xs font-bold ${saveStatus.includes('Error') ? 'text-red-500' : 'text-green-500'}`}>{saveStatus}</span>
                                     <button onClick={toggleTheme} className="p-2 text-gray-400 hover:text-black dark:hover:text-white"><Icon name={theme==='light'?'moon':'sun'} size={20}/></button>
                                     <button onClick={handleLogout} className="p-2 text-gray-400 hover:text-red-500"><Icon name="logout" size={20}/></button>
                                 </div>
