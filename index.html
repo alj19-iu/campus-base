@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CampusBase | Modern Notes</title>
+    <title>CampusBase</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -13,17 +13,17 @@
             theme: {
                 extend: {
                     colors: {
-                        brand: {
-                            50: '#f0f7ff',
-                            100: '#e0effe',
-                            500: '#3b82f6',
-                            600: '#2563eb',
-                            900: '#1e3a8a',
-                        },
-                        dark: {
-                            bg: '#0f172a',
-                            card: '#1e293b',
-                            border: '#334155'
+                        primary: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            200: '#bae6fd',
+                            300: '#7dd3fc',
+                            400: '#38bdf8',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                            800: '#075985',
+                            900: '#0c4a6e',
                         }
                     }
                 }
@@ -34,103 +34,131 @@
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 
     <style>
-        body { font-family: 'Plus Jakarta Sans', sans-serif; transition: all 0.3s ease; }
-        .glass { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.3); }
-        .dark .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
-        .card-hover { transition: transform 0.2s ease, box-shadow 0.2s ease; }
-        .card-hover:hover { transform: translateY(-4px); box-shadow: 0 12px 24px -10px rgba(0,0,0,0.1); }
-        ::-webkit-scrollbar { width: 5px; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        .dark ::-webkit-scrollbar-thumb { background: #475569; }
+        * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+        body { transition: background-color 0.2s, color 0.2s; }
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 5px; }
+        .dark ::-webkit-scrollbar-thumb { background: #4b5563; }
+        ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+        .dark ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+        
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideIn { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+        .animate-fade { animation: fadeIn 0.3s ease-out; }
+        .animate-slide { animation: slideIn 0.3s ease-out; }
     </style>
 </head>
-<body class="bg-[#f8fafc] text-slate-900 dark:bg-dark-bg dark:text-slate-100">
-
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect, useMemo, useCallback } = React;
 
-        const supabaseUrl = 'https://kxhubxycrplzbfwaokzb.supabase.co';
-        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4aHVieHljcnBsemJmd2Fva3piIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY1MjkyNDgsImV4cCI6MjA4MjEwNTI0OH0.gUsjwwdtrzVybfvSyNF4yDyTNx4UkTO_p9FvXXWnO4k';
-        const supabase = supabase.createClient(supabaseUrl, supabaseKey);
+        // Supabase Configuration
+        const SUPABASE_URL = 'https://kxhubxycrplzbfwaokzb.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4aHVieHljcnBsemJmd2Fva3piIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY1MjkyNDgsImV4cCI6MjA4MjEwNTI0OH0.gUsjwwdtrzVybfvSyNF4yDyTNx4UkTO_p9FvXXWnO4k';
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-        // --- FIXED DB HELPER: USER-SPECIFIC STORES ---
-        const dbHelper = {
-            getStoreName: (userId) => `courses_${userId}`,
-            open: (userId) => {
-                return new Promise((resolve, reject) => {
-                    const request = indexedDB.open(`CampusBase_${userId}`, 1);
-                    request.onupgradeneeded = (e) => {
-                        const db = e.target.result;
-                        if (!db.objectStoreNames.contains('data')) db.createObjectStore('data', { keyPath: 'id' });
-                    };
-                    request.onsuccess = () => resolve(request.result);
-                    request.onerror = () => reject(request.error);
-                });
-            },
-            getAll: async (userId) => {
-                if (!userId) return [];
-                const db = await dbHelper.open(userId);
-                return new Promise((resolve) => {
-                    const tx = db.transaction('data', 'readonly');
-                    const request = tx.objectStore('data').getAll();
-                    request.onsuccess = () => resolve(request.result || []);
-                });
-            },
-            saveAll: async (userId, courses) => {
-                if (!userId) return;
-                const db = await dbHelper.open(userId);
-                const tx = db.transaction('data', 'readwrite');
-                const store = tx.objectStore('data');
-                store.clear();
-                courses.forEach(c => store.put(c));
-            }
-        };
-
-        const Icon = ({ name, size = 18, className = "" }) => {
-            const icons = {
+        // Icons Component
+        const Icon = ({ name, size = 20, className = "" }) => {
+            const paths = {
                 plus: "M12 5v14M5 12h14",
-                home: "M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z",
-                folder: "M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z",
+                arrowLeft: "M19 12H5M12 19l-7-7 7-7",
+                mapPin: "M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z M12 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6",
+                clock: "M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm0-2a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm-1-8V6a1 1 0 1 1 2 0v5a1 1 0 0 1-1 1H8a1 1 0 1 1 0-2h3z",
                 trash: "M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2",
-                moon: "M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z",
-                sun: "M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z",
-                logout: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9",
-                search: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z",
                 settings: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6",
-                file: "M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"
+                external: "M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3",
+                file: "M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z",
+                folder: "M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z",
+                upload: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12",
+                x: "M18 6L6 18M6 6l12 12",
+                moon: "M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z",
+                sun: "M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z",
+                chevronRight: "M9 18l6-6-6-6",
+                search: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z",
+                pencil: "M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z",
+                grid: "M4 4h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 10h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 16h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4z",
+                list: "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",
+                alignLeft: "M17 9.5H3M21 4.5H3M21 14.5H3M17 19.5H3",
+                download: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3",
+                logout: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9",
+                book: "M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5A2.5 2.5 0 0 0 6.5 22H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15z"
             };
             return (
                 <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-                    <path d={icons[name] || ""} />
+                    <path d={paths[name] || ""} />
                 </svg>
             );
         };
 
+        // Color Palette
+        const COLORS = {
+            slate: { bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-700 dark:text-slate-300', cover: 'bg-gradient-to-br from-slate-400 to-slate-600' },
+            red: { bg: 'bg-red-100 dark:bg-red-900/30', text: 'text-red-700 dark:text-red-300', cover: 'bg-gradient-to-br from-red-400 to-red-600' },
+            orange: { bg: 'bg-orange-100 dark:bg-orange-900/30', text: 'text-orange-700 dark:text-orange-300', cover: 'bg-gradient-to-br from-orange-400 to-orange-600' },
+            amber: { bg: 'bg-amber-100 dark:bg-amber-900/30', text: 'text-amber-700 dark:text-amber-300', cover: 'bg-gradient-to-br from-amber-400 to-amber-600' },
+            emerald: { bg: 'bg-emerald-100 dark:bg-emerald-900/30', text: 'text-emerald-700 dark:text-emerald-300', cover: 'bg-gradient-to-br from-emerald-400 to-emerald-600' },
+            cyan: { bg: 'bg-cyan-100 dark:bg-cyan-900/30', text: 'text-cyan-700 dark:text-cyan-300', cover: 'bg-gradient-to-br from-cyan-400 to-cyan-600' },
+            blue: { bg: 'bg-blue-100 dark:bg-blue-900/30', text: 'text-blue-700 dark:text-blue-300', cover: 'bg-gradient-to-br from-blue-400 to-blue-600' },
+            violet: { bg: 'bg-violet-100 dark:bg-violet-900/30', text: 'text-violet-700 dark:text-violet-300', cover: 'bg-gradient-to-br from-violet-400 to-violet-600' },
+            fuchsia: { bg: 'bg-fuchsia-100 dark:bg-fuchsia-900/30', text: 'text-fuchsia-700 dark:text-fuchsia-300', cover: 'bg-gradient-to-br from-fuchsia-400 to-fuchsia-600' },
+        };
+
         function App() {
+            // State Management
             const [user, setUser] = useState(null);
             const [courses, setCourses] = useState([]);
             const [loading, setLoading] = useState(true);
+            const [syncing, setSyncing] = useState(false);
+            
+            // View State
             const [view, setView] = useState('dashboard');
             const [activeCourseId, setActiveCourseId] = useState(null);
-            const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
+            const [currentFolderId, setCurrentFolderId] = useState(null);
+            const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
+            const [searchQuery, setSearchQuery] = useState('');
+            const [resourceViewMode, setResourceViewMode] = useState('list');
+            
+            // Auth State
             const [authMode, setAuthMode] = useState('login');
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
+            const [authLoading, setAuthLoading] = useState(false);
+            const [authError, setAuthError] = useState('');
+            
+            // Modal State
+            const [showSettings, setShowSettings] = useState(false);
+            const [showResourceModal, setShowResourceModal] = useState(false);
+            const [previewFile, setPreviewFile] = useState(null);
+            const [noteEditorOpen, setNoteEditorOpen] = useState(false);
+            const [editingNote, setEditingNote] = useState(null);
+            
+            // Form State
+            const [newResTitle, setNewResTitle] = useState('');
+            const [newResUrl, setNewResUrl] = useState('');
+            const [newResFile, setNewResFile] = useState(null);
+            const [resourceType, setResourceType] = useState('note');
 
+            // Theme Management
             useEffect(() => {
-                document.documentElement.classList.toggle('dark', theme === 'dark');
+                if (theme === 'dark') {
+                    document.documentElement.classList.add('dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                }
                 localStorage.setItem('theme', theme);
             }, [theme]);
 
+            // Auth State Management - FIXED: Clear local data on auth change
             useEffect(() => {
                 supabase.auth.getSession().then(({ data: { session } }) => {
-                    if (session) {
-                        setUser(session.user);
+                    setUser(session?.user ?? null);
+                    if (session?.user) {
                         loadUserData(session.user.id);
                     } else {
                         setLoading(false);
@@ -138,171 +166,401 @@
                 });
 
                 const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-                    if (session) {
-                        setUser(session.user);
-                        loadUserData(session.user.id);
-                    } else {
-                        setUser(null);
-                        setCourses([]); // Clear state immediately on logout
-                        setLoading(false);
+                    const newUser = session?.user ?? null;
+                    
+                    // CRITICAL FIX: Clear data when switching users
+                    if (newUser?.id !== user?.id) {
+                        setCourses([]);
+                        setView('dashboard');
+                        setActiveCourseId(null);
+                        setCurrentFolderId(null);
+                    }
+                    
+                    setUser(newUser);
+                    if (newUser) {
+                        loadUserData(newUser.id);
                     }
                 });
+
                 return () => subscription.unsubscribe();
             }, []);
 
+            // Load User Data from Supabase Only
             const loadUserData = async (userId) => {
                 setLoading(true);
-                // 1. Try cloud first
-                const { data } = await supabase.from('courses').select('data').eq('user_id', userId).maybeSingle();
-                
-                if (data?.data) {
-                    setCourses(data.data);
-                    await dbHelper.saveAll(userId, data.data);
-                } else {
-                    // 2. Fallback to user-specific IndexedDB
-                    const local = await dbHelper.getAll(userId);
-                    setCourses(local);
+                try {
+                    const { data, error } = await supabase
+                        .from('courses')
+                        .select('data')
+                        .eq('user_id', userId)
+                        .maybeSingle();
+                    
+                    if (error && error.code !== 'PGRST116') {
+                        console.error('Error loading data:', error);
+                    }
+                    
+                    setCourses(data?.data || []);
+                } catch (err) {
+                    console.error('Error:', err);
                 }
                 setLoading(false);
             };
 
-            const sync = async (updated) => {
-                setCourses(updated);
+            // Sync to Cloud
+            const syncToCloud = async (updatedCourses) => {
                 if (!user) return;
-                await dbHelper.saveAll(user.id, updated);
-                await supabase.from('courses').upsert({ user_id: user.id, data: updated, updated_at: new Date() });
+                
+                setSyncing(true);
+                try {
+                    const { error } = await supabase
+                        .from('courses')
+                        .upsert({ 
+                            user_id: user.id, 
+                            data: updatedCourses,
+                            updated_at: new Date().toISOString()
+                        }, { onConflict: 'user_id' });
+                    
+                    if (error) {
+                        console.error("Sync error:", error);
+                    }
+                } catch (err) {
+                    console.error("Sync error:", err);
+                }
+                setSyncing(false);
             };
 
+            // Auth Actions
             const handleAuth = async (e) => {
                 e.preventDefault();
-                const { error } = authMode === 'login' 
-                    ? await supabase.auth.signInWithPassword({ email, password })
-                    : await supabase.auth.signUp({ email, password });
-                if (error) alert(error.message);
+                setAuthLoading(true);
+                setAuthError('');
+                
+                try {
+                    if (authMode === 'login') {
+                        const { error } = await supabase.auth.signInWithPassword({ email, password });
+                        if (error) setAuthError(error.message);
+                    } else {
+                        const { error } = await supabase.auth.signUp({ email, password });
+                        if (error) {
+                            setAuthError(error.message);
+                        } else {
+                            setAuthError('');
+                            alert("Check your email to verify your account!");
+                        }
+                    }
+                } catch (err) {
+                    setAuthError('An unexpected error occurred');
+                }
+                setAuthLoading(false);
             };
 
-            if (loading) return <div className="h-screen flex items-center justify-center dark:bg-dark-bg text-brand-500 font-bold animate-pulse">Loading Your Space...</div>;
+            const handleLogout = async () => {
+                await supabase.auth.signOut();
+                setCourses([]);
+                setView('dashboard');
+                setActiveCourseId(null);
+                setCurrentFolderId(null);
+            };
 
-            if (!user) return (
-                <div className="min-h-screen flex items-center justify-center p-6 bg-gradient-to-br from-brand-50 to-white dark:from-dark-bg dark:to-slate-900">
-                    <div className="w-full max-w-md p-8 glass rounded-3xl shadow-2xl border border-white/20">
-                        <div className="w-16 h-16 bg-brand-500 rounded-2xl mb-6 flex items-center justify-center shadow-lg shadow-brand-500/30">
-                            <Icon name="home" size={32} className="text-white" />
-                        </div>
-                        <h2 className="text-4xl font-extrabold tracking-tight mb-2">{authMode === 'login' ? 'Welcome' : 'Join Us'}</h2>
-                        <p className="text-slate-500 mb-8">Access your academic command center.</p>
-                        <form onSubmit={handleAuth} className="space-y-4">
-                            <input type="email" placeholder="Email" className="w-full p-4 rounded-xl bg-white/50 dark:bg-dark-card border border-slate-200 dark:border-dark-border outline-none focus:ring-2 focus:ring-brand-500" onChange={e => setEmail(e.target.value)} />
-                            <input type="password" placeholder="Password" className="w-full p-4 rounded-xl bg-white/50 dark:bg-dark-card border border-slate-200 dark:border-dark-border outline-none focus:ring-2 focus:ring-brand-500" onChange={e => setPassword(e.target.value)} />
-                            <button className="w-full py-4 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-brand-600/20">
-                                {authMode === 'login' ? 'Sign In' : 'Create Account'}
-                            </button>
-                        </form>
-                        <button onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')} className="w-full mt-6 text-sm font-medium text-brand-600">
-                            {authMode === 'login' ? "New here? Create an account" : "Already have an account? Sign in"}
-                        </button>
+            const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
+
+            // Course Operations
+            const addCourse = async () => {
+                const newCourse = { 
+                    id: Date.now().toString(), 
+                    code: 'NEW', 
+                    name: 'Untitled Course', 
+                    building: 'TBD', 
+                    room: '', 
+                    schedule: '',
+                    scratchpad: '', 
+                    color: 'blue', 
+                    links: []
+                };
+                const updated = [...courses, newCourse];
+                setCourses(updated);
+                await syncToCloud(updated);
+                setActiveCourseId(newCourse.id);
+                setView('course');
+                setShowSettings(true);
+            };
+
+            const updateCourse = async (id, field, value) => {
+                const updated = courses.map(c => c.id === id ? { ...c, [field]: value } : c);
+                setCourses(updated);
+                await syncToCloud(updated);
+            };
+
+            const deleteCourse = async (id) => {
+                if (!confirm("Delete this course and all its content?")) return;
+                const updated = courses.filter(c => c.id !== id);
+                setCourses(updated);
+                await syncToCloud(updated);
+                setView('dashboard');
+                setShowSettings(false);
+            };
+
+            const saveScratchpad = async (text) => {
+                if (!activeCourse) return;
+                const updated = courses.map(c => 
+                    c.id === activeCourseId ? { ...c, scratchpad: text } : c
+                );
+                setCourses(updated);
+                await syncToCloud(updated);
+            };
+
+            // Resource Operations
+            const saveResource = async () => {
+                if (!newResTitle.trim()) {
+                    alert("Title is required");
+                    return;
+                }
+                
+                const newId = Date.now().toString();
+                let resource = { 
+                    id: newId, 
+                    title: newResTitle.trim(), 
+                    type: resourceType, 
+                    parentId: currentFolderId || null 
+                };
+                
+                if (resourceType === 'link') {
+                    if (!newResUrl.trim()) {
+                        alert("URL is required");
+                        return;
+                    }
+                    resource.url = newResUrl.trim();
+                    finishResource(resource);
+                } else if (resourceType === 'file') {
+                    if (!newResFile) {
+                        alert("Please select a file");
+                        return;
+                    }
+                    const reader = new FileReader();
+                    reader.onload = async (e) => {
+                        resource.fileData = e.target.result;
+                        resource.mimeType = newResFile.type;
+                        finishResource(resource);
+                    };
+                    reader.readAsDataURL(newResFile);
+                } else if (resourceType === 'note') {
+                    resource.content = '';
+                    finishResource(resource);
+                    setTimeout(() => {
+                        setEditingNote(resource);
+                        setNoteEditorOpen(true);
+                    }, 100);
+                } else if (resourceType === 'folder') {
+                    finishResource(resource);
+                }
+            };
+
+            const finishResource = async (res) => {
+                const updatedCourse = { 
+                    ...activeCourse, 
+                    links: [...activeCourse.links, res] 
+                };
+                const updated = courses.map(c => c.id === activeCourseId ? updatedCourse : c);
+                setCourses(updated);
+                await syncToCloud(updated);
+                setNewResTitle('');
+                setNewResUrl('');
+                setNewResFile(null);
+                setShowResourceModal(false);
+            };
+
+            const saveNoteContent = async (noteId, newContent, newTitle) => {
+                const updatedLinks = activeCourse.links.map(l => 
+                    l.id === noteId ? { ...l, content: newContent, title: newTitle } : l
+                );
+                const updatedCourse = { ...activeCourse, links: updatedLinks };
+                const updated = courses.map(c => c.id === activeCourseId ? updatedCourse : c);
+                setCourses(updated);
+                await syncToCloud(updated);
+            };
+
+            const deleteResource = async (resId, type) => {
+                const msg = type === 'folder' ? "Delete folder and all its contents?" : "Delete this item?";
+                if (!confirm(msg)) return;
+                
+                let idsToDelete = new Set([resId]);
+                const findChildren = (parentId) => {
+                    const children = activeCourse.links.filter(l => l.parentId === parentId);
+                    children.forEach(child => {
+                        idsToDelete.add(child.id);
+                        if (child.type === 'folder') findChildren(child.id);
+                    });
+                };
+                
+                if (type === 'folder') findChildren(resId);
+                
+                const updatedLinks = activeCourse.links.filter(l => !idsToDelete.has(l.id));
+                const updatedCourse = { ...activeCourse, links: updatedLinks };
+                const updated = courses.map(c => c.id === activeCourseId ? updatedCourse : c);
+                setCourses(updated);
+                await syncToCloud(updated);
+            };
+
+            const handleResourceClick = (link) => {
+                if (link.type === 'folder') {
+                    setCurrentFolderId(link.id);
+                } else if (link.type === 'note') {
+                    setEditingNote(link);
+                    setNoteEditorOpen(true);
+                } else if (link.type === 'link') {
+                    window.open(link.url, '_blank');
+                } else if (link.fileData) {
+                    setPreviewFile({ 
+                        url: link.fileData, 
+                        type: link.mimeType, 
+                        title: link.title 
+                    });
+                }
+            };
+
+            // Backup & Restore
+            const downloadBackup = () => {
+                const dataStr = JSON.stringify(courses, null, 2);
+                const blob = new Blob([dataStr], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `campusbase_backup_${new Date().toISOString().slice(0,10)}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            };
+
+            const restoreBackup = async (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+                
+                if (!confirm("This will replace all current data. Continue?")) return;
+                
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    try {
+                        const importedCourses = JSON.parse(e.target.result);
+                        setCourses(importedCourses);
+                        await syncToCloud(importedCourses);
+                        alert("Backup restored successfully!");
+                    } catch (err) {
+                        alert("Invalid backup file");
+                        console.error(err);
+                    }
+                };
+                reader.readAsText(file);
+            };
+
+            // Computed Values
+            const activeCourse = courses.find(c => c.id === activeCourseId);
+            
+            const getBreadcrumbs = () => {
+                if (!currentFolderId || !activeCourse) return [];
+                const path = [];
+                let tempId = currentFolderId;
+                while (tempId) {
+                    const folder = activeCourse.links.find(l => l.id === tempId);
+                    if (folder) {
+                        path.unshift(folder);
+                        tempId = folder.parentId;
+                    } else {
+                        break;
+                    }
+                }
+                return path;
+            };
+
+            const searchResults = useMemo(() => {
+                if (!searchQuery.trim()) return [];
+                const q = searchQuery.toLowerCase();
+                const results = [];
+                courses.forEach(c => {
+                    c.links.forEach(l => {
+                        if (l.title.toLowerCase().includes(q)) {
+                            results.push({ type: 'resource', item: l, course: c });
+                        }
+                    });
+                });
+                return results;
+            }, [searchQuery, courses]);
+
+            const visibleItems = activeCourse 
+                ? activeCourse.links.filter(l => (l.parentId || null) === (currentFolderId || null))
+                : [];
+
+            const breadcrumbs = getBreadcrumbs();
+
+            // Loading State
+            if (loading) {
+                return (
+                    <div className="h-screen flex flex-col items-center justify-center">
+                        <div className="w-12 h-12 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin mb-4"></div>
+                        <p className="text-gray-500 dark:text-gray-400">Loading CampusBase...</p>
                     </div>
-                </div>
-            );
+                );
+            }
 
-            return (
-                <div className="min-h-screen flex">
-                    {/* --- SIDEBAR --- */}
-                    <aside className="w-20 lg:w-64 border-r border-slate-200 dark:border-dark-border hidden md:flex flex-col p-4 bg-white dark:bg-dark-bg z-30">
-                        <div className="flex items-center gap-3 px-2 mb-10">
-                            <div className="w-10 h-10 bg-brand-600 rounded-xl flex items-center justify-center text-white font-bold">C</div>
-                            <span className="font-bold text-xl hidden lg:block tracking-tight">CampusBase</span>
-                        </div>
-                        
-                        <nav className="flex-1 space-y-2">
-                            <button onClick={() => setView('dashboard')} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${view === 'dashboard' ? 'bg-brand-50 text-brand-600 dark:bg-brand-500/10' : 'hover:bg-slate-100 dark:hover:bg-white/5'}`}>
-                                <Icon name="home" /> <span className="hidden lg:block font-medium">Dashboard</span>
-                            </button>
-                            <div className="pt-4 pb-2 px-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden lg:block">Your Courses</div>
-                            {courses.map(c => (
-                                <button key={c.id} onClick={() => { setActiveCourseId(c.id); setView('course'); }} className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 transition-all">
-                                    <div className={`w-2 h-2 rounded-full bg-brand-500`}></div>
-                                    <span className="hidden lg:block truncate text-sm font-medium">{c.name}</span>
-                                </button>
-                            ))}
-                        </nav>
-
-                        <div className="mt-auto space-y-2 border-t border-slate-100 dark:border-dark-border pt-4">
-                            <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 transition-all">
-                                <Icon name={theme === 'light' ? 'moon' : 'sun'} /> <span className="hidden lg:block text-sm font-medium">Theme</span>
-                            </button>
-                            <button onClick={() => supabase.auth.signOut()} className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-red-50 text-red-500 transition-all">
-                                <Icon name="logout" /> <span className="hidden lg:block text-sm font-medium">Logout</span>
-                            </button>
-                        </div>
-                    </aside>
-
-                    {/* --- MAIN CONTENT --- */}
-                    <main className="flex-1 h-screen overflow-y-auto bg-[#f8fafc] dark:bg-dark-bg">
-                        {view === 'dashboard' ? (
-                            <div className="max-w-6xl mx-auto p-8 animate-fade">
-                                <header className="flex justify-between items-center mb-10">
-                                    <div>
-                                        <h1 className="text-3xl font-extrabold tracking-tight">Welcome Back</h1>
-                                        <p className="text-slate-500">You have {courses.length} active courses this semester.</p>
-                                    </div>
-                                    <button onClick={() => {
-                                        const newC = { id: Date.now().toString(), name: 'New Course', code: 'CODE101', links: [], scratchpad: '', color: 'blue' };
-                                        sync([...courses, newC]);
-                                    }} className="px-6 py-3 bg-brand-600 text-white rounded-2xl font-bold flex items-center gap-2 shadow-lg shadow-brand-600/20 hover:scale-105 transition-transform">
-                                        <Icon name="plus" size={20} /> Add Class
+            // Auth Screen
+            if (!user) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center p-6 bg-gradient-to-br from-primary-50 via-white to-violet-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800">
+                        <div className="w-full max-w-md">
+                            <div className="text-center mb-8">
+                                <div className="inline-flex items-center justify-center w-16 h-16 bg-primary-600 rounded-2xl mb-4 shadow-lg">
+                                    <Icon name="book" size={32} className="text-white" />
+                                </div>
+                                <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">CampusBase</h1>
+                                <p className="text-gray-600 dark:text-gray-400">Your academic life, organized</p>
+                            </div>
+                            
+                            <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700">
+                                <div className="flex gap-2 mb-6">
+                                    <button
+                                        onClick={() => setAuthMode('login')}
+                                        className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${
+                                            authMode === 'login'
+                                                ? 'bg-primary-600 text-white shadow-md'
+                                                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                        }`}
+                                    >
+                                        Sign In
                                     </button>
-                                </header>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {courses.map(course => (
-                                        <div key={course.id} onClick={() => { setActiveCourseId(course.id); setView('course'); }} 
-                                            class="glass rounded-3xl p-6 cursor-pointer card-hover group border-none">
-                                            <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center shadow-sm mb-4 group-hover:bg-brand-600 group-hover:text-white transition-colors">
-                                                <Icon name="folder" />
-                                            </div>
-                                            <div className="text-[10px] font-bold text-brand-600 uppercase mb-1 tracking-widest">{course.code}</div>
-                                            <h3 className="text-xl font-bold mb-4">{course.name}</h3>
-                                            <div className="flex items-center justify-between text-slate-400 text-xs">
-                                                <span>{course.links.length} Resources</span>
-                                                <div className="flex -space-x-2">
-                                                    {[1,2,3].map(i => <div key={i} className="w-6 h-6 rounded-full border-2 border-white dark:border-slate-800 bg-slate-200"></div>)}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
+                                    <button
+                                        onClick={() => setAuthMode('signup')}
+                                        className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${
+                                            authMode === 'signup'
+                                                ? 'bg-primary-600 text-white shadow-md'
+                                                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                        }`}
+                                    >
+                                        Sign Up
+                                    </button>
                                 </div>
-                            </div>
-                        ) : (
-                            <div className="p-8">
-                                <button onClick={() => setView('dashboard')} className="mb-6 flex items-center gap-2 text-slate-500 hover:text-brand-600 transition-colors">
-                                    <Icon name="plus" className="rotate-45" size={16}/> Back to Dashboard
-                                </button>
-                                <div className="glass p-8 rounded-[2rem] min-h-[70vh]">
-                                    <h2 className="text-4xl font-black mb-6">{courses.find(c => c.id === activeCourseId)?.name}</h2>
-                                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                                        <div className="lg:col-span-2 space-y-4">
-                                            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-white/5 border border-dashed border-slate-200 dark:border-white/10 text-center text-slate-400">
-                                                Click "Add" to upload resources to this course.
-                                            </div>
-                                        </div>
-                                        <div className="bg-brand-50/50 dark:bg-brand-500/5 p-6 rounded-3xl">
-                                            <h4 className="font-bold text-brand-900 dark:text-brand-100 mb-4 flex items-center gap-2">
-                                                <Icon name="settings" size={16}/> Quick Scratchpad
-                                            </h4>
-                                            <textarea className="w-full h-64 bg-transparent resize-none border-none outline-none text-sm leading-relaxed" placeholder="Type notes here..."></textarea>
-                                        </div>
+
+                                <form onSubmit={handleAuth} className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Email
+                                        </label>
+                                        <input
+                                            type="email"
+                                            required
+                                            value={email}
+                                            onChange={e => setEmail(e.target.value)}
+                                            className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg outline-none focus:ring-2 focus:ring-primary-500 dark:text-white transition-all"
+                                            placeholder="you@example.com"
+                                        />
                                     </div>
-                                </div>
-                            </div>
-                        )}
-                    </main>
-                </div>
-            );
-        }
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
-</body>
-</html>
+                                    
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Password
+                                        </label>
+                                        <input
+                                            type="password"
+                                            required
+                                            value={password}
+                                            onChange={e => setPassword(e.target.value)}
+                                            className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg outline-none
