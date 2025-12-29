@@ -3,369 +3,231 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CampusBase | Academic Hub</title>
+    <title>CampusBase | My Notes</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
     <script>
         tailwind.config = {
             darkMode: 'class',
             theme: {
                 extend: {
-                    fontFamily: { sans: ['Plus Jakarta Sans', 'sans-serif'] },
                     colors: {
-                        brand: { black: '#09090b', gray: '#27272a', light: '#f4f4f5' }
-                    }
+                        notion: {
+                            light: '#FFFFFF', dim: '#F7F7F5', dark: '#191919',
+                            darkDim: '#202020', border: '#E1E1E0', darkBorder: '#2F2F2F'
+                        }
+                    },
+                    fontFamily: { sans: ['Inter', 'sans-serif'] }
                 }
             }
         }
     </script>
     <style>
-        body { font-family: 'Plus Jakarta Sans', sans-serif; }
-        .glass { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(0,0,0,0.05); }
-        .dark .glass { background: rgba(18, 18, 23, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.05); }
-        .preview-backdrop { background: rgba(0,0,0,0.85); backdrop-filter: blur(10px); }
-        /* Prevent layout shift */
-        #root { min-height: 100vh; }
+        body { font-family: 'Inter', sans-serif; }
+        .animate-fade { animation: fadeIn 0.2s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-thumb { background: #d3d3d3; border-radius: 4px; }
+        .dark ::-webkit-scrollbar-thumb { background: #444; }
     </style>
 </head>
-<body class="bg-[#fafafa] dark:bg-[#09090b] text-zinc-900 dark:text-zinc-100">
+<body class="bg-notion-dim text-gray-900 dark:bg-notion-dark dark:text-gray-100 transition-colors duration-300">
 
     <div id="root"></div>
 
     <script type="text/babel">
-        // Destructuring inside the component to avoid Babel parsing errors at top level
-        function App() {
-            const [user, setUser] = React.useState(null);
-            const [courses, setCourses] = React.useState([]);
-            const [view, setView] = React.useState('dashboard'); // dashboard | course
-            const [activeId, setActiveId] = React.useState(null);
-            const [folderId, setFolderId] = React.useState(null);
-            const [theme, setTheme] = React.useState(localStorage.getItem('theme') || 'light');
-            const [loading, setLoading] = React.useState(true);
-            const [previewFile, setPreviewFile] = React.useState(null);
-            const [editingNote, setEditingNote] = React.useState(null);
-            const [showSettings, setShowSettings] = React.useState(false);
-            const [searchQuery, setSearchQuery] = React.useState('');
+        const { useState, useEffect, useMemo } = React;
 
-            // Auth State
-            const [email, setEmail] = React.useState('');
-            const [password, setPassword] = React.useState('');
+        // --- FIXED SUPABASE INIT ---
+        const supabaseUrl = 'https://kxhubxycrplzbfwaokzb.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4aHVieHljcnBsemJmd2Fva3piIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY1MjkyNDgsImV4cCI6MjA4MjEwNTI0OH0.gUsjwwdtrzVybfvSyNF4yDyTNx4UkTO_p9FvXXWnO4k';
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
-            const supabaseUrl = 'https://kxhubxycrplzbfwaokzb.supabase.co';
-            const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4aHVieHljcnBsemJmd2Fva3piIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY1MjkyNDgsImV4cCI6MjA4MjEwNTI0OH0.gUsjwwdtrzVybfvSyNF4yDyTNx4UkTO_p9FvXXWnO4k';
-            const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+        const DB_NAME = 'CampusBaseDB_v12'; 
+        const STORE_NAME = 'courses';
 
-            const COLORS = {
-                blue:   { hex: '#3b82f6', bg: 'bg-blue-500', text: 'text-blue-600', light: 'bg-blue-50 dark:bg-blue-900/20' },
-                purple: { hex: '#a855f7', bg: 'bg-purple-500', text: 'text-purple-600', light: 'bg-purple-50 dark:bg-purple-900/20' },
-                rose:   { hex: '#f43f5e', bg: 'bg-rose-500', text: 'text-rose-600', light: 'bg-rose-50 dark:bg-rose-900/20' },
-                amber:  { hex: '#f59e0b', bg: 'bg-amber-500', text: 'text-amber-600', light: 'bg-amber-50 dark:bg-amber-900/20' },
-                emerald:{ hex: '#10b981', bg: 'bg-emerald-500', text: 'text-emerald-600', light: 'bg-emerald-50 dark:bg-emerald-900/20' }
+        const dbHelper = {
+            open: () => new Promise((res, rej) => {
+                const req = indexedDB.open(DB_NAME, 1);
+                req.onupgradeneeded = (e) => e.target.result.createObjectStore(STORE_NAME, { keyPath: 'id' });
+                req.onsuccess = () => res(req.result);
+                req.onerror = () => rej(req.error);
+            }),
+            getAll: async () => {
+                const db = await dbHelper.open();
+                return new Promise((res) => {
+                    const req = db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).getAll();
+                    req.onsuccess = () => res(req.result || []);
+                });
+            },
+            save: async (course) => {
+                const db = await dbHelper.open();
+                db.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).put(course);
+            }
+        };
+
+        const Icon = ({ name, size = 18, className = "" }) => {
+            const icons = {
+                plus: "M12 5v14M5 12h14", arrowLeft: "M19 12H5M12 19l-7-7 7-7",
+                mapPin: "M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z",
+                clock: "M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10",
+                trash: "M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6",
+                settings: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6",
+                file: "M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z",
+                folder: "M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9",
+                upload: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4",
+                logout: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5",
+                search: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
             };
+            return (
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                    <path d={icons[name] || ""} />
+                </svg>
+            );
+        };
 
-            React.useEffect(() => {
-                document.documentElement.className = theme;
+        const COLORS = {
+            gray:   { bg: 'bg-gray-100 dark:bg-[#37352f]', text: 'text-gray-700 dark:text-gray-300', cover: 'bg-[#9B9A97]' },
+            blue:   { bg: 'bg-blue-100 dark:bg-[#243545]', text: 'text-blue-800 dark:text-blue-200', cover: 'bg-[#0B6E99]' },
+            purple: { bg: 'bg-purple-100 dark:bg-[#322841]', text: 'text-purple-800 dark:text-purple-200', cover: 'bg-[#6940A5]' },
+            red:    { bg: 'bg-red-100 dark:bg-[#462725]', text: 'text-red-800 dark:text-red-200', cover: 'bg-[#E03E3E]' },
+        };
+
+        function App() {
+            const [courses, setCourses] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [user, setUser] = useState(null);
+            const [view, setView] = useState('dashboard');
+            const [activeId, setActiveId] = useState(null);
+            const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+
+            useEffect(() => {
+                document.documentElement.classList.toggle('dark', theme === 'dark');
                 localStorage.setItem('theme', theme);
             }, [theme]);
 
-            React.useEffect(() => {
+            useEffect(() => {
                 supabase.auth.getSession().then(({ data: { session } }) => {
-                    if (session) { setUser(session.user); fetchCourses(session.user.id); }
-                    else setLoading(false);
+                    setUser(session?.user ?? null);
+                    if (session?.user) loadData(); else setLoading(false);
                 });
-
-                const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-                    if (session) { setUser(session.user); fetchCourses(session.user.id); }
-                    else { setUser(null); setCourses([]); setLoading(false); }
-                });
-
-                return () => subscription.unsubscribe();
             }, []);
 
-            async function fetchCourses(uid) {
-                const { data } = await supabase.from('courses').select('data').eq('user_id', uid).maybeSingle();
-                if (data && data.data) setCourses(data.data);
+            const loadData = async () => {
+                const { data } = await supabase.from('courses').select('data').maybeSingle();
+                if (data?.data) setCourses(data.data);
+                else { const local = await dbHelper.getAll(); setCourses(local); }
                 setLoading(false);
-            }
+            };
 
-            async function persist(updated) {
+            const sync = async (updated) => {
                 setCourses(updated);
                 await supabase.from('courses').upsert({ user_id: user.id, data: updated, updated_at: new Date() }, { onConflict: 'user_id' });
-            }
-
-            const activeCourse = courses.find(c => c.id === activeId) || null;
-            
-            // Hierarchy Logic
-            const currentItems = activeCourse 
-                ? (activeCourse.items || []).filter(item => item.parentId === folderId)
-                : [];
-
-            const breadcrumbs = React.useMemo(() => {
-                if (!activeCourse || !folderId) return [];
-                const path = [];
-                let current = folderId;
-                while (current) {
-                    const found = activeCourse.items.find(i => i.id === current);
-                    if (found) { path.unshift(found); current = found.parentId; }
-                    else break;
-                }
-                return path;
-            }, [activeCourse, folderId]);
-
-            // Handlers
-            const handleFileUpload = (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                    const newItem = {
-                        id: 'item_' + Date.now(),
-                        name: file.name,
-                        type: 'file',
-                        mime: file.type,
-                        data: ev.target.result,
-                        size: (file.size / 1024).toFixed(1) + ' KB',
-                        parentId: folderId
-                    };
-                    persist(courses.map(c => c.id === activeId ? { ...c, items: [...(c.items || []), newItem] } : c));
-                };
-                reader.readAsDataURL(file);
+                updated.forEach(c => dbHelper.save(c));
             };
 
-            const createItem = (type) => {
-                const name = type === 'folder' ? prompt('Folder Name:') : prompt('Note Title:');
-                if (!name) return;
-                const newItem = {
-                    id: 'item_' + Date.now(),
-                    name: name,
-                    type: type,
-                    parentId: folderId,
-                    content: '',
-                    date: new Date().toLocaleDateString()
-                };
-                persist(courses.map(c => c.id === activeId ? { ...c, items: [...(c.items || []), newItem] } : c));
-                if (type === 'note') setEditingNote(newItem);
-            };
+            const activeCourse = courses.find(c => c.id === activeId);
 
-            const logout = async () => {
-                await supabase.auth.signOut();
-                window.location.replace(window.location.href);
-            };
-
-            if (loading) return <div className="h-screen flex items-center justify-center font-bold text-xl animate-pulse">CAMPUSBASE</div>;
+            if (loading) return <div className="h-screen flex items-center justify-center text-gray-400 font-bold">LOADING CAMPUSBASE...</div>;
 
             if (!user) return (
-                <div className="min-h-screen flex items-center justify-center p-6 bg-zinc-50 dark:bg-zinc-950">
-                    <div className="w-full max-w-md p-10 glass rounded-[2.5rem] shadow-2xl">
-                        <div className="flex justify-center mb-8">
-                            <div className="w-16 h-16 bg-black dark:bg-white text-white dark:text-black rounded-2xl flex items-center justify-center text-3xl font-black">CB</div>
-                        </div>
-                        <h1 className="text-2xl font-black text-center mb-8 tracking-tight">Welcome to CampusBase</h1>
-                        <div className="space-y-4">
-                            <input type="email" placeholder="Email" className="w-full p-4 glass rounded-2xl outline-none" onChange={e => setEmail(e.target.value)} />
-                            <input type="password" placeholder="Password" className="w-full p-4 glass rounded-2xl outline-none" onChange={e => setPassword(e.target.value)} />
-                            <button onClick={() => supabase.auth.signInWithPassword({email, password})} className="w-full py-4 bg-black dark:bg-white text-white dark:text-black rounded-2xl font-bold active:scale-95 transition-all">Sign In</button>
-                            <button onClick={() => supabase.auth.signUp({email, password})} className="w-full text-center text-sm font-semibold text-zinc-400">Create new account</button>
-                        </div>
+                <div className="min-h-screen flex items-center justify-center p-6 animate-fade">
+                    <div className="w-full max-w-md bg-white dark:bg-notion-darkDim p-10 rounded-3xl shadow-2xl border border-gray-100 dark:border-notion-darkBorder">
+                        <div className="w-12 h-12 bg-black dark:bg-white text-white dark:text-black rounded-xl flex items-center justify-center font-black text-xl mb-6 mx-auto">CB</div>
+                        <h2 className="text-2xl font-bold text-center mb-8">Sign in to CampusBase</h2>
+                        <input type="email" placeholder="Email" className="w-full p-4 mb-4 bg-gray-50 dark:bg-black rounded-xl border outline-none" onChange={e => setEmail(e.target.value)} />
+                        <input type="password" placeholder="Password" className="w-full p-4 mb-6 bg-gray-50 dark:bg-black rounded-xl border outline-none" onChange={e => setPassword(e.target.value)} />
+                        <button onClick={() => supabase.auth.signInWithPassword({email, password})} className="w-full bg-blue-600 text-white p-4 rounded-xl font-bold">Login</button>
+                        <button onClick={() => supabase.auth.signUp({email, password})} className="w-full mt-4 text-sm text-gray-400">Create new account</button>
                     </div>
                 </div>
             );
 
             return (
-                <div className="min-h-screen pb-20">
-                    {/* NAVBAR */}
-                    <nav className="max-w-7xl mx-auto p-4 md:p-6 flex items-center justify-between sticky top-0 z-50">
-                        <div className="glass px-6 py-3 rounded-2xl flex items-center gap-4 shadow-sm cursor-pointer" onClick={() => {setView('dashboard'); setFolderId(null);}}>
-                            <div className="w-8 h-8 bg-black dark:bg-white text-white dark:text-black rounded-lg flex items-center justify-center font-black text-sm">CB</div>
-                            <span className="font-extrabold tracking-tighter text-lg hidden sm:block">CampusBase</span>
+                <div className="min-h-screen">
+                    <nav className="p-4 flex justify-between items-center max-w-7xl mx-auto">
+                        <div className="flex items-center gap-3 cursor-pointer" onClick={() => setView('dashboard')}>
+                            <div className="w-8 h-8 bg-black dark:bg-white text-white dark:text-black rounded-lg flex items-center justify-center font-black">CB</div>
+                            <span className="font-bold text-lg">CampusBase</span>
                         </div>
-                        <div className="flex gap-2">
-                            <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} className="p-3 glass rounded-xl">
-                                {theme === 'light' ? '🌙' : '☀️'}
-                            </button>
-                            <button onClick={logout} className="p-3 glass rounded-xl text-red-500 font-bold">Logout</button>
+                        <div className="flex gap-4">
+                            <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} className="p-2 glass rounded-lg"><Icon name={theme === 'light' ? 'moon' : 'sun'} /></button>
+                            <button onClick={() => supabase.auth.signOut()} className="text-red-500"><Icon name="logout" /></button>
                         </div>
                     </nav>
 
-                    <main className="max-w-7xl mx-auto px-4 md:px-6 mt-8">
-                        {view === 'dashboard' ? (
-                            <div className="animate-in fade-in">
-                                <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
-                                    <div>
-                                        <h1 className="text-5xl font-black tracking-tighter mb-4">My Courses</h1>
-                                        <div className="glass px-4 py-2 rounded-xl flex items-center gap-3 w-full md:w-80">
-                                            <span>🔍</span>
-                                            <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search courses..." className="bg-transparent outline-none w-full font-medium" />
-                                        </div>
-                                    </div>
-                                    <button onClick={() => {
-                                        const n = { id: 'c_'+Date.now(), name: 'New Course', code: '101', color: 'blue', items: [], scratchpad: '' };
-                                        persist([...courses, n]); setActiveId(n.id); setView('course'); setShowSettings(true);
-                                    }} className="bg-black dark:bg-white text-white dark:text-black px-8 py-4 rounded-2xl font-black shadow-lg hover:scale-105 transition-transform">+ New Course</button>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {courses.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase())).map(c => (
-                                        <div key={c.id} onClick={() => {setActiveId(c.id); setView('course'); setFolderId(null);}} className="group glass rounded-[2.5rem] p-8 cursor-pointer hover:shadow-2xl transition-all border-t-8" style={{ borderTopColor: COLORS[c.color || 'blue'].hex }}>
-                                            <div className={`text-xs font-black uppercase tracking-widest ${COLORS[c.color || 'blue'].text} mb-4`}>{c.code}</div>
-                                            <h3 className="text-2xl font-bold mb-4">{c.name}</h3>
-                                            <p className="text-zinc-400 font-semibold text-sm">{(c.items || []).length} resources</p>
-                                        </div>
-                                    ))}
-                                </div>
+                    {view === 'dashboard' ? (
+                        <div className="max-w-7xl mx-auto p-8 animate-fade">
+                            <div className="flex justify-between items-center mb-10">
+                                <h1 className="text-4xl font-black">Courses</h1>
+                                <button onClick={() => {
+                                    const n = { id: Date.now().toString(), name: 'New Course', code: '101', color: 'blue', links: [], scratchpad: '', building: 'Main' };
+                                    sync([...courses, n]); setActiveId(n.id); setView('course');
+                                }} className="bg-blue-600 text-white px-6 py-2 rounded-full font-bold">+ Add Class</button>
                             </div>
-                        ) : (
-                            <div className="animate-in slide-in-from-bottom-4">
-                                {/* COURSE HEADER */}
-                                <div className="flex items-center gap-4 mb-8">
-                                    <button onClick={() => setView('dashboard')} className="p-3 glass rounded-xl font-bold">←</button>
-                                    <div className="flex items-center gap-2 text-sm font-bold text-zinc-400 overflow-x-auto whitespace-nowrap pb-2">
-                                        <span className="hover:text-black dark:hover:text-white cursor-pointer" onClick={() => setFolderId(null)}>Root</span>
-                                        {breadcrumbs.map(b => (
-                                            <React.Fragment key={b.id}>
-                                                <span>/</span>
-                                                <span className="hover:text-black dark:hover:text-white cursor-pointer" onClick={() => setFolderId(b.id)}>{b.name}</span>
-                                            </React.Fragment>
-                                        ))}
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {courses.map(c => (
+                                    <div key={c.id} onClick={() => { setActiveId(c.id); setView('course'); }} className="bg-white dark:bg-notion-darkDim rounded-2xl overflow-hidden shadow-sm border dark:border-notion-darkBorder cursor-pointer hover:shadow-lg transition-all">
+                                        <div className={`h-24 ${COLORS[c.color || 'gray'].cover}`}></div>
+                                        <div className="p-6">
+                                            <div className={`inline-block px-2 py-1 rounded text-[10px] font-bold uppercase mb-2 ${COLORS[c.color || 'gray'].bg} ${COLORS[c.color || 'gray'].text}`}>{c.code}</div>
+                                            <h3 className="text-xl font-bold">{c.name}</h3>
+                                        </div>
                                     </div>
-                                </div>
+                                ))}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="animate-fade">
+                            <div className={`h-48 w-full ${COLORS[activeCourse.color].cover}`}></div>
+                            <div className="max-w-5xl mx-auto px-8 -mt-10">
+                                <div className="bg-white dark:bg-notion-dark p-10 rounded-t-3xl shadow-xl">
+                                    <button onClick={() => setView('dashboard')} className="text-sm text-gray-400 mb-6 flex items-center gap-2"><Icon name="arrowLeft" size={14} /> Back to Dashboard</button>
+                                    <h1 className="text-5xl font-black mb-4">{activeCourse.name}</h1>
+                                    <div className="flex gap-6 text-sm text-gray-400 font-medium mb-10">
+                                        <span className="flex items-center gap-2"><Icon name="mapPin" size={14} /> {activeCourse.building}</span>
+                                        <span className="flex items-center gap-2"><Icon name="clock" size={14} /> {activeCourse.schedule || 'No schedule'}</span>
+                                    </div>
 
-                                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                                    <div className="lg:col-span-8">
-                                        <div className="flex justify-between items-end mb-8">
-                                            <h1 className="text-5xl font-black tracking-tighter">{activeCourse.name}</h1>
-                                            <button onClick={() => setShowSettings(true)} className="p-3 glass rounded-xl">⚙️</button>
-                                        </div>
-
-                                        {/* TOOLS */}
-                                        <div className="flex gap-3 mb-8 overflow-x-auto pb-2">
-                                            <button onClick={() => createItem('folder')} className="flex-1 min-w-[120px] glass p-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-white dark:hover:bg-zinc-800 transition-all">
-                                                📁 Folder
-                                            </button>
-                                            <button onClick={() => createItem('note')} className="flex-1 min-w-[120px] glass p-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-white dark:hover:bg-zinc-800 transition-all">
-                                                📝 Note
-                                            </button>
-                                            <label className="flex-1 min-w-[120px] glass p-4 rounded-2xl font-bold flex items-center justify-center gap-2 cursor-pointer hover:bg-white dark:hover:bg-zinc-800 transition-all">
-                                                📤 Upload
-                                                <input type="file" className="hidden" onChange={handleFileUpload} />
-                                            </label>
-                                        </div>
-
-                                        {/* GRID */}
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            {currentItems.map(item => (
-                                                <div key={item.id} onClick={() => {
-                                                    if(item.type === 'folder') setFolderId(item.id);
-                                                    else if(item.type === 'note') setEditingNote(item);
-                                                    else setPreviewFile(item);
-                                                }} className="glass p-5 rounded-3xl flex items-center justify-between group cursor-pointer hover:shadow-xl transition-all">
-                                                    <div className="flex items-center gap-4 min-w-0">
-                                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl ${item.type === 'folder' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'}`}>
-                                                            {item.type === 'folder' ? '📁' : item.type === 'note' ? '📝' : '📄'}
+                                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+                                        <div className="lg:col-span-2">
+                                            <h3 className="font-bold text-gray-400 uppercase tracking-widest text-xs mb-6">Course Materials</h3>
+                                            <div className="space-y-2">
+                                                {activeCourse.links.length === 0 ? <p className="italic text-gray-500">No items added yet.</p> : activeCourse.links.map(l => (
+                                                    <div key={l.id} className="p-4 border dark:border-notion-darkBorder rounded-xl flex items-center justify-between group">
+                                                        <div className="flex items-center gap-4">
+                                                            <Icon name={l.type === 'folder' ? 'folder' : 'file'} className="text-blue-500" />
+                                                            <span className="font-bold">{l.title}</span>
                                                         </div>
-                                                        <div className="truncate">
-                                                            <div className="font-bold text-sm truncate">{item.name}</div>
-                                                            <div className="text-[10px] font-black uppercase text-zinc-400">{item.type === 'file' ? item.size : item.type}</div>
-                                                        </div>
+                                                        <button onClick={() => sync(courses.map(c => c.id === activeId ? {...c, links: c.links.filter(i => i.id !== l.id)} : c))} className="opacity-0 group-hover:opacity-100 text-red-500"><Icon name="trash" size={16} /></button>
                                                     </div>
-                                                    <button onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        if(confirm('Delete this item?')) {
-                                                            persist(courses.map(c => c.id === activeId ? {...c, items: c.items.filter(i => i.id !== item.id)} : c));
-                                                        }
-                                                    }} className="opacity-0 group-hover:opacity-100 p-2 text-red-500 font-bold">✕</button>
-                                                </div>
-                                            ))}
-                                            {currentItems.length === 0 && (
-                                                <div className="col-span-full py-20 text-center font-bold text-zinc-300 italic">This folder is empty</div>
-                                            )}
+                                                ))}
+                                                <button onClick={() => {
+                                                    const t = prompt('Item Title:');
+                                                    if(t) sync(courses.map(c => c.id === activeId ? {...c, links: [...c.links, {id: Date.now().toString(), title: t, type: 'note'}]} : c));
+                                                }} className="w-full p-4 border-2 border-dashed rounded-xl text-gray-400 font-bold hover:bg-gray-50 dark:hover:bg-white/5">+ Add New Item</button>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div className="bg-yellow-50 dark:bg-yellow-900/10 p-6 rounded-2xl border border-yellow-100 dark:border-yellow-900/20">
+                                                <h3 className="font-bold text-xs uppercase text-yellow-600 mb-4">Quick Scratchpad</h3>
+                                                <textarea 
+                                                    className="w-full h-48 bg-transparent outline-none resize-none text-sm font-medium leading-relaxed" 
+                                                    placeholder="Office hours, links, etc..."
+                                                    defaultValue={activeCourse.scratchpad}
+                                                    onBlur={(e) => sync(courses.map(c => c.id === activeId ? {...c, scratchpad: e.target.value} : c))}
+                                                />
+                                            </div>
                                         </div>
                                     </div>
-
-                                    <div className="lg:col-span-4">
-                                        <div className="glass p-8 rounded-[2.5rem] border-t-8" style={{ borderTopColor: COLORS[activeCourse.color || 'blue'].hex }}>
-                                            <h3 className="text-xs font-black uppercase tracking-widest text-zinc-400 mb-6">Course Scratchpad</h3>
-                                            <textarea 
-                                                value={activeCourse.scratchpad || ''} 
-                                                onChange={e => persist(courses.map(c => c.id === activeId ? {...c, scratchpad: e.target.value} : c))}
-                                                placeholder="Quick notes, room numbers, etc..."
-                                                className="w-full h-64 bg-transparent outline-none resize-none font-bold text-sm leading-relaxed"
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </main>
-
-                    {/* PREVIEW MODAL */}
-                    {previewFile && (
-                        <div className="fixed inset-0 z-[100] flex flex-col p-4 md:p-10 animate-in fade-in">
-                            <div className="preview-backdrop absolute inset-0" onClick={() => setPreviewFile(null)}></div>
-                            <div className="relative glass h-16 rounded-t-3xl flex items-center justify-between px-6 border-b z-10">
-                                <span className="font-bold truncate">{previewFile.name}</span>
-                                <button onClick={() => setPreviewFile(null)} className="font-black text-xl px-2">✕</button>
-                            </div>
-                            <div className="relative flex-1 bg-white rounded-b-3xl overflow-hidden z-10">
-                                {previewFile.mime.startsWith('image/') ? (
-                                    <div className="w-full h-full flex items-center justify-center p-4 bg-zinc-100">
-                                        <img src={previewFile.data} className="max-w-full max-h-full shadow-lg rounded-lg" />
-                                    </div>
-                                ) : (
-                                    <iframe src={previewFile.data} className="w-full h-full border-none" />
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* NOTE EDITOR */}
-                    {editingNote && (
-                        <div className="fixed inset-0 z-[100] bg-white dark:bg-zinc-950 flex flex-col p-6 md:p-12 animate-in slide-in-from-bottom-8">
-                            <div className="max-w-4xl mx-auto w-full flex-1 flex flex-col">
-                                <div className="flex justify-between items-center mb-12">
-                                    <input 
-                                        value={editingNote.name} 
-                                        onChange={e => setEditingNote({...editingNote, name: e.target.value})}
-                                        className="bg-transparent text-4xl font-black outline-none w-full mr-4"
-                                    />
-                                    <button onClick={() => {
-                                        persist(courses.map(c => c.id === activeId ? {...c, items: c.items.map(i => i.id === editingNote.id ? editingNote : i)} : c));
-                                        setEditingNote(null);
-                                    }} className="bg-black dark:bg-white text-white dark:text-black px-8 py-3 rounded-2xl font-black whitespace-nowrap shadow-xl">Save & Close</button>
-                                </div>
-                                <textarea 
-                                    value={editingNote.content}
-                                    onChange={e => setEditingNote({...editingNote, content: e.target.value})}
-                                    placeholder="Write your class notes here..."
-                                    className="flex-1 bg-transparent outline-none text-xl font-medium leading-relaxed resize-none"
-                                    autoFocus
-                                />
-                            </div>
-                        </div>
-                    )}
-
-                    {/* SETTINGS MODAL */}
-                    {showSettings && (
-                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/50 backdrop-blur-md">
-                            <div className="glass w-full max-w-md rounded-[3rem] p-10 shadow-2xl animate-in scale-in">
-                                <h2 className="text-3xl font-black mb-8">Course Info</h2>
-                                <div className="space-y-4">
-                                    <input value={activeCourse.name} onChange={e => persist(courses.map(c => c.id === activeId ? {...c, name: e.target.value} : c))} placeholder="Name" className="w-full p-4 glass rounded-2xl outline-none font-bold" />
-                                    <input value={activeCourse.code} onChange={e => persist(courses.map(c => c.id === activeId ? {...c, code: e.target.value} : c))} placeholder="Code" className="w-full p-4 glass rounded-2xl outline-none font-bold" />
-                                    <div className="flex gap-3 justify-center py-4">
-                                        {Object.keys(COLORS).map(c => (
-                                            <button key={c} onClick={() => persist(courses.map(co => co.id === activeId ? {...co, color: c} : co))} className={`w-10 h-10 rounded-xl ${COLORS[c].bg} ${activeCourse.color === c ? 'ring-4 ring-black/20' : 'opacity-40 hover:opacity-100 transition-all'}`} />
-                                        ))}
-                                    </div>
-                                    <button onClick={() => setShowSettings(false)} className="w-full py-4 bg-black dark:bg-white text-white dark:text-black rounded-2xl font-black shadow-lg">Done</button>
-                                    <button onClick={() => { if(confirm('Delete course?')){ persist(courses.filter(c => c.id !== activeId)); setView('dashboard'); setShowSettings(false); } }} className="w-full mt-4 text-red-500 font-bold">Delete This Course</button>
                                 </div>
                             </div>
                         </div>
@@ -374,9 +236,7 @@
             );
         }
 
-        // Safer mounting logic
-        const container = document.getElementById('root');
-        const root = ReactDOM.createRoot(container);
+        const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
 </body>
