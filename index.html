@@ -7,32 +7,23 @@
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
     <script>
         tailwind.config = {
             darkMode: 'class',
             theme: {
                 extend: {
                     colors: {
-                        notion: {
-                            light: '#FFFFFF', dim: '#F7F7F5', dark: '#191919',
-                            darkDim: '#202020', border: '#E1E1E0', darkBorder: '#2F2F2F',
-                            hover: '#EFEFEF', darkHover: '#2C2C2C'
-                        }
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'sans-serif'],
-                        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace']
+                        notion: { light: '#FFFFFF', dim: '#F7F7F5', dark: '#191919', darkDim: '#202020', border: '#E1E1E0', darkBorder: '#2F2F2F' }
                     }
                 }
             }
         }
     </script>
-    
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-
     <style>
         body { font-family: 'Inter', sans-serif; transition: background-color 0.3s, color 0.3s; }
         ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -41,25 +32,43 @@
         .dark ::-webkit-scrollbar-thumb { background: #444; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade { animation: fadeIn 0.2s ease-out forwards; }
+        #error-boundary { display: none; padding: 20px; background: #1e3a8a; color: white; font-family: monospace; position: fixed; top:0; left:0; width:100%; height:100%; z-index: 9999; }
     </style>
 </head>
 <body class="bg-notion-dim text-gray-900 dark:bg-notion-dark dark:text-gray-100 transition-colors duration-300">
+
+    <div id="error-boundary">
+        <h2 class="text-xl font-bold mb-4">Application Error</h2>
+        <p id="error-message">Unknown error occurred.</p>
+        <button onclick="window.location.reload()" class="mt-4 bg-white text-blue-900 px-4 py-2 rounded font-bold">Reload</button>
+    </div>
+    <script>
+        window.onerror = function(msg, url, lineNo, columnNo, error) {
+            document.getElementById('root').style.display = 'none';
+            document.getElementById('error-boundary').style.display = 'block';
+            document.getElementById('error-message').innerText = `Error: ${msg}\nLine: ${lineNo}`;
+            return false;
+        };
+    </script>
 
     <div id="root"></div>
 
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // --- 1. SUPABASE CONFIG (FIXED VARIABLE NAME) ---
+        // --- 1. SUPABASE CONNECTION (GRAY SCREEN FIX) ---
+        // We use window.supabase to access the library to avoid naming conflicts
         const supabaseUrl = 'https://kxhubxycrplzbfwaokzb.supabase.co';
         const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4aHVieHljcnBsemJmd2Fva3piIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY1MjkyNDgsImV4cCI6MjA4MjEwNTI0OH0.gUsjwwdtrzVybfvSyNF4yDyTNx4UkTO_p9FvXXWnO4k';
-        // Changed variable to 'supabaseClient' to avoid crashing the browser
-        const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
+        
+        // This ensures the library is loaded before we create the client
+        if (!window.supabase) { throw new Error("Supabase library failed to load. Please reload."); }
+        const { createClient } = window.supabase; 
+        const supabase = createClient(supabaseUrl, supabaseKey);
 
-        // --- 2. INDEXED DB HELPER (For Local Speed Only) ---
+        // --- 2. INDEXED DB HELPER (LOCAL CACHE) ---
         const DB_NAME = 'CampusBaseDB_v12'; 
         const STORE_NAME = 'courses';
-
         const dbHelper = {
             open: () => new Promise((resolve, reject) => {
                 const request = indexedDB.open(DB_NAME, 1);
@@ -72,29 +81,26 @@
             }),
             getAll: async () => {
                 const db = await dbHelper.open();
-                return new Promise((resolve) => {
+                return new Promise((res) => {
                     const tx = db.transaction(STORE_NAME, 'readonly');
                     const request = tx.objectStore(STORE_NAME).getAll();
-                    request.onsuccess = () => resolve(request.result || []);
+                    request.onsuccess = () => res(request.result || []);
                 });
             },
-            save: async (course) => {
+            save: async (item) => {
                 const db = await dbHelper.open();
                 const tx = db.transaction(STORE_NAME, 'readwrite');
-                tx.objectStore(STORE_NAME).put(course);
-                return tx.complete;
+                tx.objectStore(STORE_NAME).put(item);
             },
             clearAll: async () => {
                 const db = await dbHelper.open();
                 const tx = db.transaction(STORE_NAME, 'readwrite');
                 tx.objectStore(STORE_NAME).clear();
-                return tx.complete;
             },
             delete: async (id) => {
                 const db = await dbHelper.open();
                 const tx = db.transaction(STORE_NAME, 'readwrite');
                 tx.objectStore(STORE_NAME).delete(id);
-                return tx.complete;
             }
         };
 
@@ -171,17 +177,19 @@
 
             // --- AUTH & DATA LOGIC ---
             useEffect(() => {
-                supabaseClient.auth.getSession().then(({ data: { session } }) => {
+                // Initial Session Check
+                supabase.auth.getSession().then(({ data: { session } }) => {
                     setUser(session?.user ?? null);
                     if (session?.user) loadAllData(session.user.id); else setLoading(false);
                 });
 
-                const { data: { subscription } } = supabaseClient.auth.onAuthStateChange((_event, session) => {
+                // Listen for Login/Logout
+                const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
                     setUser(session?.user ?? null);
                     if (session?.user) {
                         loadAllData(session.user.id);
                     } else {
-                        // FIX: Wipe everything on logout so accounts don't leak
+                        // FIX: Wipe everything on logout to prevent data leaking
                         setCourses([]);
                         dbHelper.clearAll();
                         setLoading(false);
@@ -192,11 +200,11 @@
 
             const loadAllData = async (userId) => {
                 setLoading(true);
-                // FIX: Wipe local first to prevent showing previous user's data
+                // FIX: Wipe local cache first (Security)
                 await dbHelper.clearAll(); 
 
                 // Fetch from Cloud
-                const { data, error } = await supabaseClient
+                const { data, error } = await supabase
                     .from('courses')
                     .select('data')
                     .eq('user_id', userId)
@@ -204,7 +212,7 @@
                 
                 if (data && data.data) {
                     setCourses(data.data);
-                    // Sync cloud to local for cache
+                    // Update Local Cache
                     for(const c of data.data) await dbHelper.save(c);
                 } else {
                     setCourses([]); 
@@ -213,9 +221,8 @@
             };
 
             const syncToCloud = async (updatedCourses) => {
-                // Update State & Local Cache first
                 setCourses(updatedCourses);
-                const { data: { user } } = await supabaseClient.auth.getUser();
+                const { data: { user } } = await supabase.auth.getUser();
                 if (!user) return;
 
                 setSaveStatus('Saving...');
@@ -225,7 +232,7 @@
                 for(const c of updatedCourses) await dbHelper.save(c);
 
                 // Update Cloud
-                const { error } = await supabaseClient
+                const { error } = await supabase
                     .from('courses')
                     .upsert({ 
                         user_id: user.id, 
@@ -237,7 +244,7 @@
                     console.error("Cloud Sync Error:", error);
                     setSaveStatus('Error saving!');
                 } else {
-                    setSaveStatus('Saved to Cloud');
+                    setSaveStatus('Saved');
                     setTimeout(() => setSaveStatus(''), 2000);
                 }
             };
@@ -246,19 +253,19 @@
                 e.preventDefault();
                 setAuthLoading(true);
                 const { error } = authMode === 'login' 
-                    ? await supabaseClient.auth.signInWithPassword({ email, password })
-                    : await supabaseClient.auth.signUp({ email, password });
+                    ? await supabase.auth.signInWithPassword({ email, password })
+                    : await supabase.auth.signUp({ email, password });
                 
                 if (error) alert(error.message);
                 setAuthLoading(false);
             };
 
             const handleLogout = async () => {
-                await supabaseClient.auth.signOut();
-                // onAuthStateChange handles the wiping
+                await supabase.auth.signOut();
+                // onAuthStateChange will handle the cleanup
             };
 
-            // --- FEATURE LOGIC (RESTORED) ---
+            // --- UI HELPERS ---
             const activeCourse = courses.find(c => c.id === activeCourseId);
 
             const getBreadcrumbs = () => {
@@ -282,6 +289,7 @@
                 return results;
             }, [searchQuery, courses]);
 
+            // --- CRUD ACTIONS ---
             const addCourse = async () => {
                 const newCourse = { 
                     id: Date.now().toString(), code: 'NEW', name: 'Untitled Course', 
@@ -354,10 +362,32 @@
                 else if (link.fileData) setPreviewFile({ url: link.fileData, type: link.mimeType, title: link.title });
             };
 
-            // --- LOADING SCREEN ---
-            if (loading) return <div className="h-screen flex items-center justify-center text-gray-400">Loading your notes...</div>;
+            const downloadBackup = () => {
+                const dataStr = JSON.stringify(courses);
+                const blob = new Blob([dataStr], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url; a.download = `notes_backup_${new Date().toISOString().slice(0,10)}.json`;
+                document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+            };
 
-            // --- AUTH SCREEN ---
+            const restoreBackup = async (event) => {
+                const file = event.target.files[0];
+                if (!file || !confirm("Replace all notes with this backup?")) return;
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    try {
+                        const importedCourses = JSON.parse(e.target.result);
+                        await syncToCloud(importedCourses);
+                        alert("Restored!");
+                    } catch (err) { alert("Error!"); }
+                };
+                reader.readAsText(file);
+            };
+
+            // --- RENDERERS ---
+            if (loading) return <div className="h-screen flex items-center justify-center text-gray-400">Loading your workspace...</div>;
+
             if (!user) {
                 return (
                     <div className="min-h-screen flex items-center justify-center bg-notion-dim dark:bg-notion-dark p-6 animate-fade">
@@ -370,7 +400,7 @@
                                 <input type="email" required className="w-full p-3 mt-1 bg-gray-50 dark:bg-black border rounded-lg outline-none" onChange={e => setEmail(e.target.value)} /></div>
                                 <div><label className="text-xs font-bold uppercase text-gray-400">Password</label>
                                 <input type="password" required className="w-full p-3 mt-1 bg-gray-50 dark:bg-black border rounded-lg outline-none" onChange={e => setPassword(e.target.value)} /></div>
-                                <button disabled={authLoading} type="submit" className="w-full bg-blue-600 text-white p-4 rounded-xl font-bold hover:bg-blue-700">{authLoading ? '...' : (authMode === 'login' ? 'Sign In' : 'Create Account')}</button>
+                                <button disabled={authLoading} type="submit" className="w-full bg-blue-600 text-white p-4 rounded-xl font-bold hover:bg-blue-700">{authLoading ? 'Please wait...' : (authMode === 'login' ? 'Sign In' : 'Create Account')}</button>
                             </form>
                             <div className="mt-8 pt-6 border-t dark:border-notion-darkBorder text-center">
                                 <button onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')} className="text-sm text-blue-600 font-medium hover:underline">
@@ -387,7 +417,6 @@
 
             return (
                 <div className="min-h-screen pb-20">
-                    {/* DASHBOARD */}
                     {view === 'dashboard' && (
                         <div className="max-w-7xl mx-auto p-4 md:p-8 animate-fade">
                             <header className="flex flex-col md:flex-row items-center justify-between mb-8 gap-4">
@@ -407,6 +436,8 @@
                                 </div>
                                 <div className="flex gap-4 items-center">
                                     <span className={`text-xs font-bold ${saveStatus.includes('Error') ? 'text-red-500' : 'text-green-500'}`}>{saveStatus}</span>
+                                    <button onClick={downloadBackup} className="p-2 text-gray-400"><Icon name="download" /></button>
+                                    <label className="p-2 text-gray-400 cursor-pointer"><input type="file" onChange={restoreBackup} hidden accept=".json" /><Icon name="upload" /></label>
                                     <button onClick={toggleTheme} className="p-2 text-gray-400 hover:text-black dark:hover:text-white"><Icon name={theme==='light'?'moon':'sun'} size={20}/></button>
                                     <button onClick={handleLogout} className="p-2 text-gray-400 hover:text-red-500"><Icon name="logout" size={20}/></button>
                                 </div>
@@ -432,7 +463,6 @@
                         </div>
                     )}
 
-                    {/* COURSE VIEW */}
                     {view === 'course' && activeCourse && (
                         <div className="animate-fade">
                             <nav className="sticky top-0 z-20 bg-white/95 dark:bg-notion-dark/95 backdrop-blur-sm border-b px-4 py-2 flex justify-between items-center h-14">
