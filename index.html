@@ -62,8 +62,7 @@
         const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4aHVieHljcnBsemJmd2Fva3piIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY1MjkyNDgsImV4cCI6MjA4MjEwNTI0OH0.gUsjwwdtrzVybfvSyNF4yDyTNx4UkTO_p9FvXXWnO4k';
         const supabase = supabase.createClient(supabaseUrl, supabaseKey);
 
-        // --- 2. INDEXED DB HELPER (FALLBACK ONLY) ---
-        // We keep the DB helper for local backup, but loadAllData is updated to prioritize Cloud/User separation.
+        // --- 2. INDEXED DB HELPER ---
         const DB_NAME = 'CampusBaseDB_v12'; 
         const STORE_NAME = 'courses';
 
@@ -195,46 +194,47 @@
             }, [theme]);
 
             useEffect(() => {
-                // Check current session
                 supabase.auth.getSession().then(({ data: { session } }) => {
                     setUser(session?.user ?? null);
-                    if (session?.user) loadAllData(session.user.id); else setLoading(false);
+                    if (session?.user) loadAllData(); else setLoading(false);
                 });
 
-                // Listen for changes
                 const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
                     setUser(session?.user ?? null);
-                    if (session?.user) {
-                        loadAllData(session.user.id);
-                    } else {
-                        setCourses([]);
-                        dbHelper.clearAll();
-                    }
+                    if (session?.user) loadAllData();
                 });
 
                 return () => subscription.unsubscribe();
             }, []);
 
-            const loadAllData = async (userId) => {
+            // --- FIXED: DATA LOADING LOGIC ---
+            const loadAllData = async () => {
                 setLoading(true);
-                // 1. Fetch specifically for this user to avoid data bleed
-                const { data, error } = await supabase
-                    .from('courses')
-                    .select('data')
-                    .eq('user_id', userId)
-                    .maybeSingle();
-                
-                if (data && data.data) {
-                    setCourses(data.data);
-                    // Update local storage for current user session
-                    await dbHelper.clearAll();
-                    for(const c of data.data) await dbHelper.save(c);
-                } else {
-                    // If no cloud data, we clear local to ensure new user starts fresh
-                    setCourses([]);
-                    await dbHelper.clearAll();
+                try {
+                    // 1. Get local data first
+                    const localData = await dbHelper.getAll();
+                    
+                    // 2. Get cloud data
+                    const { data, error } = await supabase.from('courses').select('data').maybeSingle();
+                    
+                    if (data && data.data && data.data.length > 0) {
+                        // Cloud has data: Sync cloud to state and local storage
+                        setCourses(data.data);
+                        await dbHelper.clearAll();
+                        for(const c of data.data) await dbHelper.save(c);
+                    } else if (localData && localData.length > 0) {
+                        // Cloud is empty but local has data: Restore local and sync UP to cloud
+                        setCourses(localData);
+                        await syncToCloud(localData);
+                    } else {
+                        // Both are empty
+                        setCourses([]);
+                    }
+                } catch (err) {
+                    console.error("Load Error:", err);
+                } finally {
+                    setLoading(false);
                 }
-                setLoading(false);
             };
 
             const syncToCloud = async (updatedCourses) => {
@@ -271,8 +271,8 @@
             const handleLogout = async () => {
                 await supabase.auth.signOut();
                 setUser(null);
-                setCourses([]);
-                await dbHelper.clearAll();
+                // Note: We don't clear courses state here so local persistence is visible 
+                // until the next login or page refresh.
             };
 
             const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
@@ -291,7 +291,7 @@
                 return path;
             };
 
-            // --- COMPUTED: SEARCH RESULTS ---
+            // --- SEARCH LOGIC ---
             const searchResults = useMemo(() => {
                 if (!searchQuery.trim()) return [];
                 const q = searchQuery.toLowerCase();
@@ -337,14 +337,14 @@
                         await syncToCloud(importedCourses);
                         alert("Backup restored successfully!");
                     } catch (err) {
-                        alert("Error restoring file. Make sure it's a valid JSON backup.");
+                        alert("Error restoring file.");
                         console.error(err);
                     }
                 };
                 reader.readAsText(file);
             };
 
-            // --- CRUD ---
+            // --- CRUD ACTIONS ---
             const addCourse = async () => {
                 const newCourse = { 
                     id: Date.now().toString(), 
@@ -394,7 +394,7 @@
                 await syncToCloud(updatedAll);
             };
 
-            // --- RESOURCE / NOTE CRUD ---
+            // --- RESOURCE CRUD ---
             const saveResource = async () => {
                 if (!newResTitle) return alert("Title required");
                 const newId = Date.now().toString();
@@ -405,7 +405,7 @@
                     if (!newResFile) return alert("No file");
                     const reader = new FileReader();
                     reader.onload = async (e) => {
-                        resource.fileData = e.target.result; 
+                        resource.fileData = e.target.result;
                         resource.mimeType = newResFile.type;
                         finishResource(resource);
                     };
@@ -625,7 +625,7 @@
                                     </div>
 
                                     <div className="min-h-[300px]">
-                                        {visibleItems.length === 0 && <p className="text-gray-400 dark:text-gray-500 italic text-sm py-10 text-center bg-gray-50 dark:bg-notion-darkDim/30 rounded-lg border border-dashed border-gray-200 dark:border-gray-800">No notes or files yet.<br/><button onClick={() => setShowResourceModal(true)} className="text-blue-500 hover:underline mt-2">Add your first item</button></p>}
+                                        {visibleItems.length === 0 && <p className="text-gray-400 dark:text-gray-500 italic text-sm py-10 text-center bg-gray-50 dark:bg-notion-darkDim/30 rounded-lg border border-dashed border-gray-200 dark:border-gray-800">No notes yet.<br/><button onClick={() => setShowResourceModal(true)} className="text-blue-500 hover:underline mt-2">Add your first item</button></p>}
                                         
                                         {resourceViewMode === 'list' && (
                                             <div className="space-y-1">
