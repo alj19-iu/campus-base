@@ -3,84 +3,63 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CampusBase Pro</title>
+    <title>CampusBase | File Vault</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 
     <script>
         tailwind.config = {
             darkMode: 'class',
             theme: {
                 extend: {
+                    fontFamily: { sans: ['Plus Jakarta Sans', 'sans-serif'] },
                     colors: {
-                        notion: { light: '#FFFFFF', dim: '#F7F7F5', dark: '#191919', darkDim: '#202020', border: '#E1E1E0', darkBorder: '#2F2F2F' }
+                        brand: { 50: '#f0f7ff', 100: '#e0effe', 200: '#bae0fd', 300: '#7cc8fb', 400: '#36adf7', 500: '#0c92eb', 600: '#0074ca', 700: '#005da3', 800: '#055086', 900: '#0a436f' },
+                        dark: { bg: '#09090b', card: '#121217', border: '#27272a' }
                     }
                 }
             }
         }
     </script>
     <style>
-        body { font-family: 'Inter', sans-serif; transition: background-color 0.3s; }
-        .animate-fade { animation: fadeIn 0.2s ease-out forwards; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-        #error-screen { display: none; position: fixed; inset: 0; background: #1a1a1a; color: white; padding: 40px; z-index: 9999; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+        body { transition: background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+        .glass { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.3); }
+        .dark .glass { background: rgba(18, 18, 23, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(39, 39, 42, 0.5); }
+        .file-card:hover .delete-btn { opacity: 1; transform: translateX(0); }
+        input[type="file"]::file-selector-button { display: none; }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-thumb { background: #d4d4d8; border-radius: 10px; }
+        .dark ::-webkit-scrollbar-thumb { background: #3f3f46; }
     </style>
 </head>
-<body class="bg-notion-dim text-gray-900 dark:bg-notion-dark dark:text-gray-100">
-
-    <div id="error-screen">
-        <h1 class="text-2xl font-bold text-red-500 mb-4">Application Error</h1>
-        <p id="error-text" class="mb-8 font-monospace text-gray-400"></p>
-        <button onclick="localStorage.clear(); window.location.reload();" class="bg-white text-black px-6 py-2 rounded-lg font-bold">Fix & Restart</button>
-    </div>
-
-    <script>
-        window.onerror = function(msg, url, line) {
-            document.getElementById('error-screen').style.display = 'flex';
-            document.getElementById('error-text').innerText = msg + " (Line: " + line + ")";
-            return false;
-        };
-    </script>
+<body class="bg-[#fcfcfd] text-slate-900 dark:bg-dark-bg dark:text-zinc-100 min-h-screen">
 
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo, useRef } = React;
+        const { useState, useEffect, useMemo } = React;
 
-        // --- DATABASE CONFIG ---
         const supabaseUrl = 'https://kxhubxycrplzbfwaokzb.supabase.co';
         const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4aHVieHljcnBsemJmd2Fva3piIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY1MjkyNDgsImV4cCI6MjA4MjEwNTI0OH0.gUsjwwdtrzVybfvSyNF4yDyTNx4UkTO_p9FvXXWnO4k';
         const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
-        const DB_NAME = 'CampusBase_Main_V1';
-        const dbHelper = {
-            open: () => new Promise((res) => {
-                const req = indexedDB.open(DB_NAME, 1);
-                req.onupgradeneeded = (e) => e.target.result.createObjectStore('data', { keyPath: 'id' });
-                req.onsuccess = () => res(req.result);
-            }),
-            wipe: async () => {
-                const db = await dbHelper.open();
-                db.transaction('data', 'readwrite').objectStore('data').clear();
-            }
-        };
-
-        const Icon = ({ name, size = 18, className = "" }) => {
+        const Icon = ({ name, size = 20, className = "" }) => {
             const icons = {
                 plus: "M12 5v14M5 12h14", arrowLeft: "M19 12H5M12 19l-7-7 7-7",
-                mapPin: "M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z M12 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6",
-                clock: "M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm0-2a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm-1-8V6a1 1 0 1 1 2 0v5a1 1 0 0 1-1 1H8a1 1 0 1 1 0-2h3z",
+                file: "M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z m0 0v7h7",
                 trash: "M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2",
-                settings: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6", external: "M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3",
-                file: "M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z", folder: "M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z",
-                x: "M18 6L6 18M6 6l12 12", moon: "M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z", 
-                sun: "M12 1v2M12 21v2M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z", search: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z",
-                chevronRight: "M9 18l6-6-6-6", alignLeft: "M17 9.5H3M21 4.5H3M21 14.5H3M17 19.5H3", logout: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"
+                settings: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6",
+                download: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3",
+                moon: "M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z", 
+                sun: "M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z",
+                search: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z",
+                logout: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9",
+                upload: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"
             };
             return (
                 <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -89,47 +68,26 @@
             );
         };
 
-        const COLORS = {
-            gray:   { bg: 'bg-gray-100 dark:bg-[#37352f]', text: 'text-gray-700 dark:text-gray-300', cover: 'bg-[#9B9A97]' },
-            blue:   { bg: 'bg-blue-100 dark:bg-[#243545]', text: 'text-blue-800 dark:text-blue-200', cover: 'bg-[#0B6E99]' },
-            green:  { bg: 'bg-green-100 dark:bg-[#28392d]', text: 'text-green-800 dark:text-green-200', cover: 'bg-[#0F7B6C]' },
-            yellow: { bg: 'bg-yellow-100 dark:bg-[#403924]', text: 'text-yellow-800 dark:text-yellow-200', cover: 'bg-[#DFAB01]' },
-            red:    { bg: 'bg-red-100 dark:bg-[#462725]', text: 'text-red-800 dark:text-red-200', cover: 'bg-[#E03E3E]' },
-            purple: { bg: 'bg-purple-100 dark:bg-[#322841]', text: 'text-purple-800 dark:text-purple-200', cover: 'bg-[#6940A5]' },
-        };
-
         function App() {
             const [user, setUser] = useState(null);
             const [courses, setCourses] = useState([]);
+            const [view, setView] = useState('dashboard'); // dashboard, course
+            const [activeId, setActiveId] = useState(null);
+            const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
             const [loading, setLoading] = useState(true);
-            const [view, setView] = useState('dashboard');
-            const [activeCourseId, setActiveCourseId] = useState(null);
-            const [currentFolderId, setCurrentFolderId] = useState(null);
-            const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
-            const [searchQuery, setSearchQuery] = useState('');
-            const [saveStatus, setSaveStatus] = useState('');
-
-            // Auth States
+            const [syncing, setSyncing] = useState(false);
+            const [search, setSearch] = useState('');
+            
+            // UI States
+            const [showSettings, setShowSettings] = useState(false);
+            const [authMode, setAuthMode] = useState('login');
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
-            const [authMode, setAuthMode] = useState('login');
-
-            // Modal States
-            const [showSettings, setShowSettings] = useState(false);
-            const [showAddModal, setShowAddModal] = useState(false);
-            const [editingNote, setEditingNote] = useState(null);
-
-            // Resource Form
-            const [resTitle, setResTitle] = useState('');
-            const [resType, setResType] = useState('note');
 
             useEffect(() => {
-                const el = document.documentElement;
-                if (theme === 'dark') el.classList.add('dark'); else el.classList.remove('dark');
+                document.documentElement.className = theme;
                 localStorage.setItem('theme', theme);
             }, [theme]);
-
-            const toggleTheme = () => setTheme(t => t === 'light' ? 'dark' : 'light');
 
             useEffect(() => {
                 supabase.auth.getSession().then(({ data: { session } }) => {
@@ -137,148 +95,129 @@
                     else setLoading(false);
                 });
 
-                const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-                    if (session) {
-                        setUser(session.user);
-                        loadData(session.user.id);
-                    } else {
-                        // FORCE CLEANUP FOR MULTI-USER SAFETY
-                        setUser(null);
-                        setCourses([]);
-                        await dbHelper.wipe();
-                        setLoading(false);
-                    }
+                const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+                    if (session) { setUser(session.user); loadData(session.user.id); }
+                    else { setUser(null); setCourses([]); setLoading(false); }
                 });
                 return () => subscription.unsubscribe();
             }, []);
 
             const loadData = async (uid) => {
-                setLoading(true);
                 const { data } = await supabase.from('courses').select('data').eq('user_id', uid).maybeSingle();
                 if (data?.data) setCourses(data.data);
                 setLoading(false);
             };
 
-            const sync = async (newData) => {
-                setCourses(newData);
-                const { data: { user } } = await supabase.auth.getUser();
-                if (!user) return;
-                setSaveStatus('Saving...');
-                const { error } = await supabase.from('courses').upsert({ user_id: user.id, data: newData, updated_at: new Date() }, { onConflict: 'user_id' });
-                setSaveStatus(error ? 'Sync Error' : 'Saved');
-                setTimeout(() => setSaveStatus(''), 2000);
+            const sync = async (updated) => {
+                setCourses(updated);
+                setSyncing(true);
+                const { error } = await supabase.from('courses').upsert({ 
+                    user_id: user.id, 
+                    data: updated, 
+                    updated_at: new Date() 
+                }, { onConflict: 'user_id' });
+                setSyncing(false);
             };
 
-            const handleAuth = async (e) => {
-                e.preventDefault();
-                const { error } = authMode === 'login' 
-                    ? await supabase.auth.signInWithPassword({ email, password })
-                    : await supabase.auth.signUp({ email, password });
-                if (error) alert(error.message);
+            const handleFileUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const newFile = {
+                        id: Date.now().toString(),
+                        name: file.name,
+                        size: (file.size / 1024).toFixed(1) + ' KB',
+                        type: file.type,
+                        data: event.target.result,
+                        date: new Date().toLocaleDateString()
+                    };
+                    const updated = courses.map(c => c.id === activeId ? { ...c, files: [...(c.files || []), newFile] } : c);
+                    sync(updated);
+                };
+                reader.readAsDataURL(file);
             };
 
-            // --- BREADCRUMBS ---
-            const activeCourse = courses.find(c => c.id === activeCourseId);
-            const getBreadcrumbs = () => {
-                if (!currentFolderId || !activeCourse) return [];
-                const crumbs = [];
-                let curr = activeCourse.links.find(l => l.id === currentFolderId);
-                while(curr) {
-                    crumbs.unshift(curr);
-                    curr = activeCourse.links.find(l => l.id === curr.parentId);
-                }
-                return crumbs;
-            };
-
-            // --- SEARCH ---
-            const searchResults = useMemo(() => {
-                if (!searchQuery.trim()) return [];
-                const res = [];
-                courses.forEach(c => c.links.forEach(l => {
-                    if (l.title.toLowerCase().includes(searchQuery.toLowerCase())) res.push({ c, l });
-                }));
-                return res;
-            }, [searchQuery, courses]);
-
-            // --- ACTIONS ---
-            const createCourse = () => {
-                const n = { id: Date.now().toString(), name: 'New Course', code: 'CODE101', building: '', room: '', schedule: '', color: 'gray', scratchpad: '', links: [] };
-                sync([...courses, n]);
-                setActiveCourseId(n.id); setView('course'); setShowSettings(true);
-            };
-
-            const updateActiveCourse = (field, val) => {
-                sync(courses.map(c => c.id === activeCourseId ? { ...c, [field]: val } : c));
-            };
-
-            const addResource = () => {
-                const r = { id: Date.now().toString(), title: resTitle, type: resType, parentId: currentFolderId || null, content: '' };
-                const updated = courses.map(c => c.id === activeCourseId ? { ...c, links: [...c.links, r] } : c);
+            const deleteFile = (fileId) => {
+                const updated = courses.map(c => c.id === activeId ? { ...c, files: c.files.filter(f => f.id !== fileId) } : c);
                 sync(updated);
-                setShowAddModal(false); setResTitle('');
-                if (resType === 'note') { setEditingNote(r); }
             };
 
-            if (loading) return <div className="h-screen flex items-center justify-center font-bold animate-pulse">Initializing...</div>;
+            const downloadFile = (file) => {
+                const link = document.createElement('a');
+                link.href = file.data;
+                link.download = file.name;
+                link.click();
+            };
+
+            const activeCourse = courses.find(c => c.id === activeId);
+            const filteredCourses = courses.filter(c => c.name.toLowerCase().includes(search.toLowerCase()) || c.code.toLowerCase().includes(search.toLowerCase()));
+
+            if (loading) return <div className="h-screen flex items-center justify-center bg-white dark:bg-dark-bg transition-colors"><div className="w-8 h-8 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div></div>;
 
             if (!user) return (
-                <div className="min-h-screen flex items-center justify-center p-6 bg-white dark:bg-notion-dark">
-                    <div className="max-w-md w-full p-8 border dark:border-notion-darkBorder rounded-2xl shadow-xl">
-                        <h1 className="text-3xl font-black mb-2 italic">CampusBase</h1>
-                        <p className="text-gray-500 mb-8">Synchronized academic workspace.</p>
-                        <form onSubmit={handleAuth} className="space-y-4">
-                            <input type="email" placeholder="Email" className="w-full p-3 bg-gray-50 dark:bg-black border rounded-xl" onChange={e => setEmail(e.target.value)} />
-                            <input type="password" placeholder="Password" className="w-full p-3 bg-gray-50 dark:bg-black border rounded-xl" onChange={e => setPassword(e.target.value)} />
-                            <button className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-500/20">{authMode === 'login' ? 'Login' : 'Create Account'}</button>
+                <div className="min-h-screen flex items-center justify-center p-6 bg-[#f8f9fb] dark:bg-dark-bg">
+                    <div className="w-full max-w-md p-10 glass rounded-[2.5rem] shadow-2xl animate-fade">
+                        <div className="mb-10 text-center">
+                            <div className="w-16 h-16 bg-brand-500 rounded-2xl flex items-center justify-center text-white mx-auto mb-6 shadow-xl shadow-brand-500/20"><Icon name="file" size={32}/></div>
+                            <h1 className="text-3xl font-extrabold tracking-tight">CampusBase</h1>
+                            <p className="text-slate-500 dark:text-zinc-400 mt-2 font-medium">Your academic file vault.</p>
+                        </div>
+                        <form onSubmit={async (e) => { e.preventDefault(); const {error} = authMode === 'login' ? await supabase.auth.signInWithPassword({email, password}) : await supabase.auth.signUp({email, password}); if(error) alert(error.message); }} className="space-y-4">
+                            <input type="email" placeholder="Email" className="w-full p-4 bg-white/50 dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800 rounded-2xl outline-none focus:ring-2 ring-brand-500 transition-all" onChange={e => setEmail(e.target.value)} />
+                            <input type="password" placeholder="Password" className="w-full p-4 bg-white/50 dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800 rounded-2xl outline-none focus:ring-2 ring-brand-500 transition-all" onChange={e => setPassword(e.target.value)} />
+                            <button className="w-full py-4 bg-brand-600 hover:bg-brand-700 text-white rounded-2xl font-bold shadow-lg shadow-brand-600/25 transition-all active:scale-95">{authMode === 'login' ? 'Sign In' : 'Create Account'}</button>
                         </form>
-                        <button onClick={() => setAuthMode(authMode==='login'?'signup':'login')} className="w-full mt-6 text-sm text-gray-400 hover:text-blue-500 underline">
-                            {authMode === 'login' ? "Need an account? Sign up" : "Already have an account? Log in"}
-                        </button>
+                        <button onClick={() => setAuthMode(authMode==='login'?'signup':'login')} className="w-full mt-6 text-sm font-semibold text-slate-400 hover:text-brand-500 transition-colors underline underline-offset-4">{authMode === 'login' ? "New here? Get started" : "Already have an account? Log in"}</button>
                     </div>
                 </div>
             );
 
             return (
-                <div className="min-h-screen">
-                    {view === 'dashboard' ? (
-                        <div className="max-w-6xl mx-auto p-8 animate-fade">
-                            <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-6">
-                                <div className="relative w-full md:w-96">
-                                    <div className="absolute left-4 top-3 text-gray-400"><Icon name="search" size={18}/></div>
-                                    <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search notes..." className="w-full pl-12 pr-4 py-3 bg-white dark:bg-notion-darkDim border dark:border-notion-darkBorder rounded-xl shadow-sm outline-none focus:ring-2 ring-blue-500/20" />
-                                    {searchQuery && (
-                                        <div className="absolute top-14 inset-x-0 bg-white dark:bg-notion-darkDim border rounded-xl shadow-2xl z-50 overflow-hidden">
-                                            {searchResults.map((r, i) => (
-                                                <div key={i} onClick={() => { setActiveCourseId(r.c.id); setView('course'); setSearchQuery(''); }} className="p-4 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer border-b last:border-0 dark:border-notion-darkBorder">
-                                                    <div className="text-[10px] font-bold text-blue-500 uppercase">{r.c.code}</div>
-                                                    <div className="font-medium">{r.l.title}</div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="flex items-center gap-4 ml-auto">
-                                    <span className="text-xs font-bold text-green-500 uppercase tracking-widest">{saveStatus}</span>
-                                    <button onClick={toggleTheme} className="p-2 hover:bg-white dark:hover:bg-white/5 rounded-full transition-colors"><Icon name={theme==='light'?'moon':'sun'} /></button>
-                                    <button onClick={() => supabase.auth.signOut()} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-full transition-colors"><Icon name="logout" /></button>
-                                </div>
-                            </header>
+                <div className="max-w-7xl mx-auto p-4 md:p-10">
+                    {/* NAV BAR */}
+                    <nav className="flex items-center justify-between mb-12 glass p-4 rounded-3xl sticky top-4 z-50">
+                        <div className="flex items-center gap-4">
+                            <div onClick={() => setView('dashboard')} className="w-10 h-10 bg-brand-500 rounded-xl flex items-center justify-center text-white cursor-pointer"><Icon name="file" size={20}/></div>
+                            <h2 className="font-extrabold text-xl tracking-tight hidden md:block">CampusBase</h2>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {syncing && <span className="text-[10px] font-bold text-brand-500 uppercase tracking-widest mr-2 animate-pulse">Syncing...</span>}
+                            <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} className="p-3 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-2xl transition-all"><Icon name={theme==='light'?'moon':'sun'}/></button>
+                            <button onClick={() => supabase.auth.signOut()} className="p-3 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-2xl transition-all"><Icon name="logout"/></button>
+                        </div>
+                    </nav>
 
-                            <div className="flex justify-between items-end mb-8">
-                                <h2 className="text-3xl font-black">Courses</h2>
-                                <button onClick={createCourse} className="bg-blue-600 text-white px-5 py-2 rounded-lg font-bold text-sm flex items-center gap-2 hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/30"><Icon name="plus" size={16}/> New Course</button>
+                    {view === 'dashboard' ? (
+                        <div className="animate-fade">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
+                                <div>
+                                    <h1 className="text-4xl font-black tracking-tight mb-2">My Library</h1>
+                                    <p className="text-slate-500 dark:text-zinc-400 font-medium">Manage files for {courses.length} courses.</p>
+                                </div>
+                                <div className="flex gap-3">
+                                    <div className="relative">
+                                        <Icon name="search" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18}/>
+                                        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search courses..." className="pl-12 pr-6 py-4 bg-white dark:bg-dark-card border border-slate-200 dark:border-dark-border rounded-2xl outline-none w-full md:w-64 focus:ring-2 ring-brand-500 shadow-sm transition-all" />
+                                    </div>
+                                    <button onClick={() => {
+                                        const n = { id: Date.now().toString(), name: 'New Course', code: 'CODE101', building: '', room: '', files: [], color: 'brand' };
+                                        sync([...courses, n]);
+                                        setActiveId(n.id); setView('course'); setShowSettings(true);
+                                    }} className="bg-brand-600 hover:bg-brand-700 text-white p-4 rounded-2xl shadow-lg shadow-brand-600/20 transition-all active:scale-95"><Icon name="plus"/></button>
+                                </div>
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-                                {courses.map(c => (
-                                    <div key={c.id} onClick={() => { setActiveCourseId(c.id); setView('course'); setCurrentFolderId(null); }} className="group bg-white dark:bg-notion-darkDim border dark:border-notion-darkBorder rounded-2xl overflow-hidden cursor-pointer shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
-                                        <div className={`h-32 w-full ${COLORS[c.color].cover}`}></div>
-                                        <div className="p-6">
-                                            <div className={`inline-block px-2 py-1 rounded text-[10px] font-black uppercase mb-3 ${COLORS[c.color].bg} ${COLORS[c.color].text}`}>{c.code}</div>
-                                            <h3 className="text-xl font-bold truncate">{c.name}</h3>
-                                            <div className="flex items-center gap-3 text-xs text-gray-400 mt-4">
-                                                <span className="flex items-center gap-1"><Icon name="mapPin" size={12}/> {c.building || 'TBD'}</span>
-                                                <span className="flex items-center gap-1"><Icon name="clock" size={12}/> {c.schedule || 'TBD'}</span>
+                                {filteredCourses.map(c => (
+                                    <div key={c.id} onClick={() => { setActiveId(c.id); setView('course'); }} className="group glass rounded-[2.5rem] p-8 cursor-pointer hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 relative overflow-hidden">
+                                        <div className="absolute top-0 right-0 w-32 h-32 bg-brand-500/5 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-700"></div>
+                                        <div className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-600 mb-4 bg-brand-50 dark:bg-brand-900/20 px-3 py-1.5 rounded-full inline-block">{c.code}</div>
+                                        <h3 className="text-2xl font-extrabold mb-6 truncate">{c.name}</h3>
+                                        <div className="flex items-center justify-between text-sm font-bold text-slate-400">
+                                            <span>{(c.files || []).length} Files</span>
+                                            <div className="flex -space-x-2">
+                                                {[1,2,3].map(i => <div key={i} className="w-6 h-6 rounded-full border-2 border-white dark:border-zinc-900 bg-slate-200 dark:bg-zinc-800"></div>)}
                                             </div>
                                         </div>
                                     </div>
@@ -286,63 +225,62 @@
                             </div>
                         </div>
                     ) : (
-                        <div className="animate-fade">
-                            <nav className="h-14 border-b dark:border-notion-darkBorder flex items-center justify-between px-6 sticky top-0 bg-white/80 dark:bg-notion-dark/80 backdrop-blur-md z-40">
-                                <button onClick={() => setView('dashboard')} className="flex items-center gap-2 text-sm font-bold hover:text-blue-500 transition-colors"><Icon name="arrowLeft" /> Dashboard</button>
-                                <div className="flex items-center gap-3">
-                                    <span className="text-[10px] font-bold text-green-500">{saveStatus}</span>
-                                    <button onClick={() => setShowSettings(true)} className="flex items-center gap-2 text-sm font-bold bg-gray-100 dark:bg-white/5 px-3 py-1.5 rounded-lg"><Icon name="settings" size={16}/> Page Settings</button>
-                                </div>
-                            </nav>
-
-                            <div className={`h-48 w-full ${COLORS[activeCourse.color].cover}`}></div>
-
-                            <div className="max-w-6xl mx-auto px-6 -mt-12 grid grid-cols-1 lg:grid-cols-12 gap-8 mb-20">
-                                <div className="lg:col-span-8 bg-white dark:bg-notion-darkDim rounded-2xl shadow-2xl border dark:border-notion-darkBorder p-8 md:p-12">
-                                    <h1 className="text-5xl font-black mb-4 tracking-tight">{activeCourse.name}</h1>
-                                    <div className="flex flex-wrap gap-6 text-sm text-gray-500 font-medium mb-12 pb-8 border-b dark:border-white/5">
-                                        <div className="flex items-center gap-2 bg-gray-50 dark:bg-white/5 px-3 py-1.5 rounded-full"><Icon name="mapPin" size={14}/> {activeCourse.building} {activeCourse.room || '(No Room)'}</div>
-                                        <div className="flex items-center gap-2 bg-gray-50 dark:bg-white/5 px-3 py-1.5 rounded-full"><Icon name="clock" size={14}/> {activeCourse.schedule || 'No Schedule'}</div>
+                        <div className="animate-fade pb-20">
+                            <button onClick={() => setView('dashboard')} className="flex items-center gap-2 font-bold text-slate-400 hover:text-brand-500 transition-colors mb-8"><Icon name="arrowLeft" size={16}/> Back to Library</button>
+                            
+                            <div className="flex flex-col lg:flex-row gap-10">
+                                <div className="flex-1">
+                                    <div className="flex items-end justify-between mb-10">
+                                        <div>
+                                            <h1 className="text-5xl font-black tracking-tighter mb-4">{activeCourse.name}</h1>
+                                            <div className="flex items-center gap-4 text-slate-400 font-bold text-sm uppercase tracking-widest">
+                                                <span>{activeCourse.code}</span>
+                                                <span className="w-1.5 h-1.5 bg-slate-300 rounded-full"></span>
+                                                <span>{activeCourse.building} {activeCourse.room}</span>
+                                            </div>
+                                        </div>
+                                        <button onClick={() => setShowSettings(true)} className="p-4 glass rounded-2xl hover:bg-slate-100 dark:hover:bg-zinc-800 transition-all"><Icon name="settings"/></button>
                                     </div>
 
-                                    {/* BREADCRUMBS */}
-                                    <div className="flex items-center gap-2 text-sm text-gray-400 mb-6 font-bold">
-                                        <button onClick={() => setCurrentFolderId(null)} className={!currentFolderId ? 'text-black dark:text-white underline underline-offset-4' : 'hover:text-black dark:hover:text-white'}>Home</button>
-                                        {getBreadcrumbs().map(b => (
-                                            <React.Fragment key={b.id}>
-                                                <Icon name="chevronRight" size={14} />
-                                                <button onClick={() => setCurrentFolderId(b.id)} className={currentFolderId === b.id ? 'text-black dark:text-white underline underline-offset-4' : 'hover:text-black dark:hover:text-white'}>{b.title}</button>
-                                            </React.Fragment>
-                                        ))}
-                                    </div>
+                                    {/* UPLOAD ZONE */}
+                                    <label className="group flex flex-col items-center justify-center border-4 border-dashed border-slate-200 dark:border-zinc-800 rounded-[3rem] p-16 hover:border-brand-500 dark:hover:border-brand-500 hover:bg-brand-50/30 dark:hover:bg-brand-500/5 transition-all cursor-pointer mb-12">
+                                        <input type="file" className="hidden" onChange={handleFileUpload} />
+                                        <div className="w-20 h-20 bg-brand-100 dark:bg-brand-900/30 rounded-3xl flex items-center justify-center text-brand-600 mb-6 group-hover:scale-110 transition-transform"><Icon name="upload" size={32}/></div>
+                                        <h4 className="text-xl font-extrabold mb-1">Click to upload files</h4>
+                                        <p className="text-slate-400 font-medium text-sm text-center">Images, PDFs, or Documents (Max 10MB)</p>
+                                    </label>
 
-                                    <div className="space-y-2">
-                                        {activeCourse.links.filter(l => (l.parentId || null) === (currentFolderId || null)).map(link => (
-                                            <div key={link.id} onClick={() => { if(link.type==='folder') setCurrentFolderId(link.id); else setEditingNote(link); }} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-white/5 rounded-xl group cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-all border border-transparent hover:border-blue-200 dark:hover:border-blue-800">
-                                                <div className="flex items-center gap-4">
-                                                    <Icon name={link.type==='folder'?'folder':'alignLeft'} className={link.type==='folder'?'text-amber-400':'text-blue-500'} />
-                                                    <span className="font-bold">{link.title}</span>
+                                    {/* FILE LIST */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {(activeCourse.files || []).map(file => (
+                                            <div key={file.id} className="file-card p-6 glass rounded-3xl flex items-center justify-between group transition-all">
+                                                <div className="flex items-center gap-5 min-w-0">
+                                                    <div className="w-14 h-14 bg-white dark:bg-zinc-800 rounded-2xl flex items-center justify-center text-brand-500 shadow-sm">
+                                                        {file.type.startsWith('image/') ? <img src={file.data} className="w-full h-full object-cover rounded-2xl" /> : <Icon name="file" size={24}/>}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <div className="font-extrabold truncate text-sm">{file.name}</div>
+                                                        <div className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-wider">{file.size} • {file.date}</div>
+                                                    </div>
                                                 </div>
-                                                <button onClick={(e) => { e.stopPropagation(); updateActiveCourse('links', activeCourse.links.filter(li => li.id !== link.id)); }} className="opacity-0 group-hover:opacity-100 p-2 text-gray-400 hover:text-red-500 transition-all"><Icon name="trash" size={16}/></button>
+                                                <div className="flex items-center gap-2">
+                                                    <button onClick={() => downloadFile(file)} className="p-3 hover:bg-brand-50 dark:hover:bg-brand-500/10 text-brand-600 rounded-xl transition-all"><Icon name="download" size={18}/></button>
+                                                    <button onClick={() => deleteFile(file.id)} className="p-3 hover:bg-red-50 dark:hover:bg-red-500/10 text-red-500 rounded-xl transition-all"><Icon name="trash" size={18}/></button>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
-
-                                    <button onClick={() => setShowAddModal(true)} className="w-full mt-8 p-6 border-2 border-dashed dark:border-notion-darkBorder rounded-2xl text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/5 transition-all flex flex-col items-center gap-2">
-                                        <Icon name="plus" size={24}/>
-                                        <span className="text-xs font-black uppercase tracking-widest">Add Note or Folder</span>
-                                    </button>
                                 </div>
 
-                                {/* SCRATCHPAD */}
-                                <div className="lg:col-span-4 space-y-6">
-                                    <div className="bg-amber-50 dark:bg-[#2A2620] p-6 rounded-2xl border border-amber-100 dark:border-transparent">
-                                        <h3 className="text-xs font-black uppercase tracking-tighter text-amber-700 dark:text-amber-500 mb-4 flex items-center gap-2"><Icon name="alignLeft" size={14}/> Scratchpad</h3>
+                                {/* SIDEBAR INFO */}
+                                <div className="lg:w-80 space-y-6">
+                                    <div className="p-8 glass rounded-[2.5rem]">
+                                        <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-6">Quick Scratchpad</h3>
                                         <textarea 
-                                            value={activeCourse.scratchpad} 
-                                            onChange={e => updateActiveCourse('scratchpad', e.target.value)}
-                                            placeholder="Jot down quick reminders..."
-                                            className="w-full h-64 bg-transparent outline-none resize-none text-sm font-medium leading-relaxed dark:text-amber-100/80"
+                                            value={activeCourse.scratchpad || ''} 
+                                            onChange={e => sync(courses.map(c => c.id === activeId ? { ...c, scratchpad: e.target.value } : c))}
+                                            placeholder="Room codes, exam dates..."
+                                            className="w-full h-40 bg-transparent border-none outline-none resize-none text-sm font-semibold leading-relaxed"
                                         />
                                     </div>
                                 </div>
@@ -350,81 +288,34 @@
                         </div>
                     )}
 
-                    {/* FULL SCREEN NOTE EDITOR */}
-                    {editingNote && (
-                        <div className="fixed inset-0 z-[100] bg-white dark:bg-notion-dark flex flex-col animate-fade">
-                            <div className="h-16 border-b dark:border-notion-darkBorder flex items-center justify-between px-8">
-                                <div className="flex items-center gap-4 flex-1">
-                                    <Icon name="alignLeft" className="text-blue-500" />
-                                    <input 
-                                        value={editingNote.title} 
-                                        onChange={e => setEditingNote({...editingNote, title: e.target.value})}
-                                        className="text-xl font-bold bg-transparent outline-none w-full" 
-                                    />
-                                </div>
-                                <button 
-                                    onClick={() => {
-                                        const updatedLinks = activeCourse.links.map(l => l.id === editingNote.id ? editingNote : l);
-                                        updateActiveCourse('links', updatedLinks);
-                                        setEditingNote(null);
-                                    }}
-                                    className="bg-black dark:bg-white text-white dark:text-black px-6 py-2 rounded-xl font-bold shadow-xl transition-transform active:scale-95"
-                                >
-                                    Close & Save
-                                </button>
-                            </div>
-                            <textarea 
-                                value={editingNote.content}
-                                onChange={e => setEditingNote({...editingNote, content: e.target.value})}
-                                placeholder="Type your notes here..."
-                                className="flex-1 p-12 md:p-20 max-w-4xl mx-auto w-full bg-transparent outline-none resize-none text-lg leading-loose"
-                                autoFocus
-                            />
-                        </div>
-                    )}
-
                     {/* SETTINGS MODAL */}
-                    {showSettings && activeCourse && (
-                        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-                            <div className="bg-white dark:bg-notion-darkDim w-full max-w-md rounded-3xl p-8 shadow-2xl animate-fade">
-                                <h2 className="text-2xl font-black mb-6">Course Settings</h2>
-                                <div className="space-y-4">
-                                    <div><label className="text-[10px] font-black uppercase text-gray-400">Course Name</label><input value={activeCourse.name} onChange={e => updateActiveCourse('name', e.target.value)} className="w-full p-3 bg-gray-50 dark:bg-black border rounded-xl mt-1" /></div>
+                    {showSettings && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+                            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setShowSettings(false)}></div>
+                            <div className="relative glass w-full max-w-lg rounded-[3rem] p-10 animate-fade shadow-2xl">
+                                <h2 className="text-3xl font-black mb-8 tracking-tight">Course Settings</h2>
+                                <div className="space-y-5">
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div><label className="text-[10px] font-black uppercase text-gray-400">Course Code</label><input value={activeCourse.code} onChange={e => updateActiveCourse('code', e.target.value)} className="w-full p-3 bg-gray-50 dark:bg-black border rounded-xl mt-1" /></div>
-                                        <div><label className="text-[10px] font-black uppercase text-gray-400">Schedule</label><input value={activeCourse.schedule} onChange={e => updateActiveCourse('schedule', e.target.value)} className="w-full p-3 bg-gray-50 dark:bg-black border rounded-xl mt-1" placeholder="MWF 10:00" /></div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div><label className="text-[10px] font-black uppercase text-gray-400">Building</label><input value={activeCourse.building} onChange={e => updateActiveCourse('building', e.target.value)} className="w-full p-3 bg-gray-50 dark:bg-black border rounded-xl mt-1" /></div>
-                                        <div><label className="text-[10px] font-black uppercase text-gray-400">Room</label><input value={activeCourse.room} onChange={e => updateActiveCourse('room', e.target.value)} className="w-full p-3 bg-gray-50 dark:bg-black border rounded-xl mt-1" /></div>
-                                    </div>
-                                    <div><label className="text-[10px] font-black uppercase text-gray-400">Color Theme</label>
-                                        <div className="flex flex-wrap gap-3 mt-2">
-                                            {Object.keys(COLORS).map(c => (<button key={c} onClick={() => updateActiveCourse('color', c)} className={`w-8 h-8 rounded-full ${COLORS[c].cover} ${activeCourse.color===c?'ring-4 ring-blue-500/40':''}`}/>))}
+                                        <div className="col-span-2">
+                                            <label className="text-[10px] font-black uppercase text-slate-400 ml-4 mb-2 block">Course Name</label>
+                                            <input value={activeCourse.name} onChange={e => sync(courses.map(c => c.id === activeId ? {...c, name: e.target.value} : c))} className="w-full p-4 bg-white/50 dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800 rounded-2xl" />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase text-slate-400 ml-4 mb-2 block">Code</label>
+                                            <input value={activeCourse.code} onChange={e => sync(courses.map(c => c.id === activeId ? {...c, code: e.target.value} : c))} className="w-full p-4 bg-white/50 dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800 rounded-2xl" />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase text-slate-400 ml-4 mb-2 block">Building/Room</label>
+                                            <input value={`${activeCourse.building} ${activeCourse.room}`} onChange={e => {
+                                                const [b, ...r] = e.target.value.split(' ');
+                                                sync(courses.map(c => c.id === activeId ? {...c, building: b, room: r.join(' ')} : c));
+                                            }} className="w-full p-4 bg-white/50 dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800 rounded-2xl" />
                                         </div>
                                     </div>
                                 </div>
-                                <div className="flex justify-between mt-10">
-                                    <button onClick={() => { if(confirm("Delete Course?")) { sync(courses.filter(c => c.id !== activeCourseId)); setView('dashboard'); setShowSettings(false); }}} className="text-red-500 font-bold hover:underline">Delete Course</button>
-                                    <button onClick={() => setShowSettings(false)} className="bg-black dark:bg-white text-white dark:text-black px-8 py-2 rounded-xl font-bold">Done</button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* ADD RESOURCE MODAL */}
-                    {showAddModal && (
-                        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-                            <div className="bg-white dark:bg-notion-darkDim w-full max-w-sm rounded-3xl p-8 shadow-2xl animate-fade">
-                                <h3 className="text-xl font-black mb-6">Create New</h3>
-                                <div className="flex gap-2 p-1 bg-gray-100 dark:bg-black rounded-xl mb-6">
-                                    <button onClick={() => setResType('note')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${resType==='note'?'bg-white dark:bg-notion-darkDim shadow-sm':'text-gray-400'}`}>Note</button>
-                                    <button onClick={() => setResType('folder')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${resType==='folder'?'bg-white dark:bg-notion-darkDim shadow-sm':'text-gray-400'}`}>Folder</button>
-                                </div>
-                                <input value={resTitle} onChange={e => setResTitle(e.target.value)} placeholder="Title..." className="w-full p-4 bg-gray-50 dark:bg-black border rounded-xl mb-8 outline-none focus:ring-2 ring-blue-500" autoFocus />
-                                <div className="flex gap-3">
-                                    <button onClick={() => setShowAddModal(false)} className="flex-1 py-3 font-bold text-gray-400">Cancel</button>
-                                    <button onClick={addResource} className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold">Create</button>
+                                <div className="flex justify-between mt-12">
+                                    <button onClick={() => { if(confirm('Delete course?')) { sync(courses.filter(c => c.id !== activeId)); setView('dashboard'); setShowSettings(false); } }} className="text-red-500 font-bold hover:underline underline-offset-8">Delete Course</button>
+                                    <button onClick={() => setShowSettings(false)} className="bg-brand-600 text-white px-10 py-4 rounded-2xl font-extrabold shadow-lg shadow-brand-600/20 active:scale-95 transition-all">Done</button>
                                 </div>
                             </div>
                         </div>
